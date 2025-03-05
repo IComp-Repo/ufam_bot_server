@@ -22,3 +22,5 @@ services:
       - ./data/postgres/data:/var/lib/postgresql/data/
     env_file:
       - ./dotenv_files/.env
+    ports:
+      - "5432:5432"
