@@ -11,16 +11,17 @@
 ### Clonando o Repositório
 
 ```bash
-https://github.com/IComp-Projects/bot_telegram_test_server.git
+git clone https://github.com/IComp-Projects/bot_telegram_test_server.git
 cd .\bot_telegram_test_server\
 ```
 ## Configuração
 
 ### Variáveis de Ambiente
 
-Crie uma pasta chamada dotenv_files e dentro dessa pasta criar um arquivo`.env` na raiz do projeto com as seguintes variáveis
+Dentro da pasta chamada dotenv_files renomear o arquivo .env-example para .env
 ```bash
-SECRET_KEY="CHANGE-ME"
+# fake secret key
+SECRET_KEY="bot!_telegram!_env!_!@#"
 
 # 0 False, 1 True
 DEBUG="1"
@@ -28,11 +29,12 @@ DEBUG="1"
 # Comma Separated values
 ALLOWED_HOSTS="127.0.0.1, localhost"
 
+# fake values
 DB_ENGINE="django.db.backends.postgresql"
-POSTGRES_DB="CHANGE-ME"
-POSTGRES_USER="CHANGE-ME"
-POSTGRES_PASSWORD="CHANGE-ME"
-POSTGRES_HOST="localhost"
+POSTGRES_DB="bot_database"
+POSTGRES_USER="bot_user"
+POSTGRES_PASSWORD="bot_user_password"
+POSTGRES_HOST="psql"
 POSTGRES_PORT="5432"
 ```
 ## Execução
