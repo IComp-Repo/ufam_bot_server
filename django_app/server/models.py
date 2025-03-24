@@ -32,6 +32,20 @@ class Quiz(models.Model):
     title = models.CharField(max_length=255)
     created_by = models.ForeignKey(Professor, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('opened', 'Opened'),
+        ('closed', 'Closed'),
+    ]
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='scheduled'
+    )
 
 class Question(models.Model):
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
