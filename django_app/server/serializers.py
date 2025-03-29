@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Quiz, Option, Question, Classroom, Professor
+from .models import User, Quiz, Option, Question, Classroom, Professor, Notification
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,3 +37,10 @@ class ProfessorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Professor
         fields = ['id', 'user']
+        
+class NotificationSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    
+    class Meta:
+        model = Notification
+        fields = ['user','message','sent_at']

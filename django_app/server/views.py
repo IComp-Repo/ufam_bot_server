@@ -1,8 +1,8 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Classroom, Professor, User, Quiz, Question, Tag, Option
-from .serializers import ClassroomSerializer, UserSerializer, QuizSerializer, ProfessorSerializer
+from .models import Classroom, Professor, User, Quiz, Question, Tag, Option,Notification
+from .serializers import ClassroomSerializer, UserSerializer, QuizSerializer, ProfessorSerializer, NotificationSerializer
 from django.shortcuts import get_object_or_404
 
 class UserViewSet(viewsets.ViewSet):
@@ -182,3 +182,17 @@ class ProfessorViewSet(viewsets.ModelViewSet):
         professor = get_object_or_404(Professor, pk=pk)
         professor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    
+    def create(self,request):
+        serializer = NotificationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+    
+    def list(self,request):
+        notifications = Notification.objects.all()
+        serializer = NotificationSerializer(notifications,many=True)
+        return Response(serializer.data)
