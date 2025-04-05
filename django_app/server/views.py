@@ -21,6 +21,16 @@ class UserViewSet(viewsets.ViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED) # Create a user
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, pk=None):
+        user = User.objects.filter(telegram_id = pk)
+        print(user)
+        serializer = UserSerializer(user, many = False)
+        if serializer.is_valid():
+            user.delete()
+            return Response(status= status.HTTP_204_NO_CONTENT)
+        return Response(serializer.errors, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class QuizViewSet(viewsets.ModelViewSet):
 
