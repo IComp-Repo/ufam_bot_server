@@ -7,20 +7,71 @@ from django.shortcuts import get_object_or_404
 
 class UserViewSet(viewsets.ViewSet):
     """
-    ViewSet para criar e listar usuários.
+    ViewSet para criar, listar e buscar usuários.
     """
 
-    def list(self, request): #GET -> GET ALL
-        users = User.objects.all()
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data) # Return all users
+    def list(self, request):
+        try:
+            users = User.objects.all()
+            serializer = UserSerializer(users, many=True)
+            return Response({
+                'success': True,
+                'message': 'Lista de usuários recuperada com sucesso.',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': 'Ocorreu um erro ao listar os usuários.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def create(self, request): #POST -> CREATE USER
+    def retrieve(self, request, pk=None):
+        try:
+            user = get_object_or_404(User, pk=pk)
+            serializer = UserSerializer(user)
+            return Response({
+                'success': True,
+                'message': 'Usuário encontrado com sucesso.',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Usuário com ID {pk} não encontrado.',
+                'error': str(e)
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def retrieve_by_telegram(self, request, telegram_id=None):
+        try:
+            user = get_object_or_404(User, telegram_id=telegram_id)
+            serializer = UserSerializer(user)
+            return Response({
+                'success': True,
+                'message': 'Usuário encontrado pelo Telegram ID com sucesso.',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Usuário com Telegram ID {telegram_id} não encontrado.',
+                'error': str(e)
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def create(self, request):
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED) # Create a user
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': True,
+                'message': 'Usuário criado com sucesso.',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            'success': False,
+            'message': 'Falha ao criar usuário. Verifique os dados enviados.',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 class QuizViewSet(viewsets.ModelViewSet):
 
