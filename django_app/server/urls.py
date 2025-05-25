@@ -9,9 +9,13 @@ router.register(r'classroom', ClassroomViewSet, basename='classroom')
 router.register(r'professor', ProfessorViewSet, basename='professor')
 router.register(r'notification', NotificationViewSet, basename='notification')
 
-
-# URL customizada para buscar por telegram_id
+# URLs customizadas para deletar && recuperar usuário pelo telegram_id
 urlpatterns = [
-    path('users/telegram/<str:telegram_id>/', UserViewSet.as_view({'get': 'retrieve_by_telegram'}), name='user-by-telegram'),
-    path('users/delete/telegram/<str:telegram_id>/', UserViewSet.as_view({'post': 'delete_by_telegram_id'}), name='delete-by-telegram_id')
+    path('users/telegram/delete/', 
+         UserViewSet.as_view({'delete': 'delete_by_telegram_id'}), 
+         name='user-delete-by-telegram'),
+
+    path('users/telegram/<str:telegram_id>/', 
+         UserViewSet.as_view({'get': 'retrieve_by_telegram'}), 
+         name='user-by-telegram')
 ] + router.urls

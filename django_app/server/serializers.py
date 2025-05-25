@@ -6,6 +6,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'telegram_id', 'nickname', 'created_at']
 
+class DeleteUserSerializer(serializers.Serializer):
+    telegram_id = serializers.IntegerField()
+        
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
