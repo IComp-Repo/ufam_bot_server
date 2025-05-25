@@ -13,4 +13,5 @@ router.register(r'notification', NotificationViewSet, basename='notification')
 # URL customizada para buscar por telegram_id
 urlpatterns = [
     path('users/telegram/<str:telegram_id>/', UserViewSet.as_view({'get': 'retrieve_by_telegram'}), name='user-by-telegram'),
+    path('users/delete/telegram/<str:telegram_id>/', UserViewSet.as_view({'post': 'delete_by_telegram_id'}), name='delete-by-telegram_id')
 ] + router.urls
