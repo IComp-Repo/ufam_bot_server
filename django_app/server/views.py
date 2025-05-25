@@ -15,6 +15,12 @@ class UserViewSet(viewsets.ViewSet):
         try:
             users = User.objects.all()
             serializer = UserSerializer(users, many=True)
+            if not users:
+                return Response({
+                    'success': True,
+                    'message': 'Lista de usuários recuperada está vazia.',
+                    'data': serializer.data
+                } ,status=status.HTTP_404_NOT_FOUND)
             return Response({
                 'success': True,
                 'message': 'Lista de usuários recuperada com sucesso.',
