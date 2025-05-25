@@ -2,8 +2,9 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Classroom, Professor, User, Quiz, Question, Tag, Option,Notification
-from .serializers import ClassroomSerializer, UserSerializer, QuizSerializer, ProfessorSerializer, NotificationSerializer
+from .serializers import ClassroomSerializer, UserSerializer, DeleteUserSerializer, QuizSerializer, ProfessorSerializer, NotificationSerializer
 from django.shortcuts import get_object_or_404
+from django.db import DatabaseError
 
 class UserViewSet(viewsets.ViewSet):
     """
@@ -14,6 +15,12 @@ class UserViewSet(viewsets.ViewSet):
         try:
             users = User.objects.all()
             serializer = UserSerializer(users, many=True)
+            if not users:
+                return Response({
+                    'success': True,
+                    'message': 'Lista de usuários recuperada está vazia.',
+                    'data': serializer.data
+                } ,status=status.HTTP_404_NOT_FOUND)
             return Response({
                 'success': True,
                 'message': 'Lista de usuários recuperada com sucesso.',
@@ -72,6 +79,54 @@ class UserViewSet(viewsets.ViewSet):
             'message': 'Falha ao criar usuário. Verifique os dados enviados.',
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        try:
+            user = get_object_or_404(User, pk=pk)
+            user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Erro ao deletar o usuário com ID {pk}.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete_by_telegram_id(self, request):
+        serializer = DeleteUserSerializer(data=request.data)
+        if serializer.is_valid():
+            telegram_id = serializer.validated_data.get('telegram_id')
+            try:
+                user = get_object_or_404(User, telegram_id=telegram_id)
+                user.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+
+            except DatabaseError as e_db:
+                return Response(
+                    {
+                        'success': False,
+                        'message': f'Falha ao deletar o usuário com Telegram ID {telegram_id}. Verifique o banco de dados.',
+                        'error': str(e_db)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )         
+            except Exception as e:
+                return Response(
+                    {
+                        'success': False,
+                        'message': f'Falha ao deletar o usuário com Telegram ID {telegram_id}. Erro inesperado.', 
+                        'error': str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                ) 
+        return Response(
+            {
+                'success': False,
+                'message': 'Falha ao deletar usuário. Requisição mal formulada.',
+                'errors': serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST)
+
 
 class QuizViewSet(viewsets.ModelViewSet):
 
