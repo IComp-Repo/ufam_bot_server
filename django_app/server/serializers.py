@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Quiz, Option, Question, Classroom, Professor, Notification
+from .models import User, Quiz, Option, Question, Classroom, Professor, Student, Notification
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -40,7 +40,15 @@ class ProfessorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Professor
         fields = ['id', 'user']
-        
+ 
+class StudentSerializer(serializers.ModelSerializer):
+    user = UserSerializer(required=True)
+
+    class Meta:
+        model = Student 
+        fields = ['id', 'user', 'register']       
+
+
 class NotificationSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     

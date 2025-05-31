@@ -1,8 +1,8 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Classroom, Professor, User, Quiz, Question, Tag, Option,Notification
-from .serializers import ClassroomSerializer, UserSerializer, DeleteUserSerializer, QuizSerializer, ProfessorSerializer, NotificationSerializer
+from .models import Classroom, Professor, User, Quiz, Question, Tag, Option, Student, Notification
+from .serializers import ClassroomSerializer, UserSerializer, DeleteUserSerializer, QuizSerializer, ProfessorSerializer, StudentSerializer, NotificationSerializer
 from django.shortcuts import get_object_or_404
 from django.db import DatabaseError
 
@@ -17,7 +17,7 @@ class UserViewSet(viewsets.ViewSet):
             serializer = UserSerializer(users, many=True)
             if not users:
                 return Response({
-                    'success': True,
+                    'success': False,
                     'message': 'Lista de usuários recuperada está vazia.',
                     'data': serializer.data
                 } ,status=status.HTTP_404_NOT_FOUND)
@@ -302,3 +302,141 @@ class NotificationViewSet(viewsets.ModelViewSet):
         notifications = Notification.objects.all()
         serializer = NotificationSerializer(notifications,many=True)
         return Response(serializer.data)
+
+
+class StudentViewSet(viewsets.ModelViewSet):
+    def list(self, request):
+        try:
+            students = Student.objects.all()
+            serializer = StudentSerializer(students, many=True)
+
+            if not students:
+                return Response(
+                    {
+                        "success": False,
+                        "message": "Lista de estudantes recuperada se encontra vazia.",
+                        "data": serializer.data
+                    }, 
+                    status=status.HTTP_404_NOT_FOUND)
+
+            return Response(
+                {
+                    'status': True,
+                    'message': 'Lista de estudantes recuperada com sucesso.', 
+                    'data':serializer.data
+                }, 
+                status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': 'Falha ao recuperar lista de estudantes.', 
+                    'error': str(e)
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def retrieve(self, request, pk=None):
+        try:
+            student = get_object_or_404(Student, pk=pk)
+            serializer = StudentSerializer(student)
+            return Response(
+                {
+                        'status': True,
+                        'message': f'Estudante com PK: {pk} recuperado com sucesso.', 
+                        'data':serializer.data
+                }, 
+                status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': f'Falha ao recuperar estudante com PK: {pk}',
+                    'error': str(e) 
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def create(self, request):
+        '''
+        Cria-se um registro do model Estudante, junto a criação de um Usuário associado ao mesmo.
+
+        Exemplo de Payload POST: 
+        {
+            "user": {
+                "telegram_id": 6,
+                "nickname": "zeromeia"
+            },
+            "register": 32271010
+        }
+ 
+        '''
+
+      
+        payload = request.data
+        user_serializer = UserSerializer(data=payload.get('user'))
+        if not user_serializer.is_valid():
+            return Response({
+                'success': False,
+                'message': 'Falha ao criar usuário. Verifique os dados no campo "user".',
+                'errors': user_serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        student_serializer = StudentSerializer(data=payload)
+        if not student_serializer.is_valid():
+            return Response({
+                'success': False,
+                'message': 'Falha ao criar estudante. Verifique os dados de campos como: registro, etc...',
+                'errors': student_serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = user_serializer.save()
+            student_serializer.save(user=user)
+            return Response({
+                'status': True,
+                'message': 'Estudante criado com sucesso.',
+                'data': student_serializer.data
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': f'Falha ao criar estudante. Erro inesperado.', 
+                    'error': str(e) 
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def retrieve_by_register(self, request, register=None):
+        try:
+            student = get_object_or_404(Student, register=register)
+            serializer = StudentSerializer(student)
+            return Response({
+                'success': True,
+                'message': 'Estudante encontrado pelo Número de Matrícula com sucesso.',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Estudante com Número de Matrícula {register} não encontrado.',
+                'error': str(e)
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def destroy(self, request, pk=None):
+        try:
+            student = get_object_or_404(Student, pk=pk)
+            student.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': f'Falha ao deletar estudante com PK: {pk}',
+                    'error': str(e)
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+
+
