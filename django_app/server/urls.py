@@ -1,26 +1,7 @@
-from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, QuizViewSet, ClassroomViewSet, ProfessorViewSet, StudentViewSet, NotificationViewSet
 from django.urls import path
-
-router = DefaultRouter()
-router.register(r'users', UserViewSet, basename='user')
-router.register(r'quiz', QuizViewSet, basename='quiz')
-router.register(r'classroom', ClassroomViewSet, basename='classroom')
-router.register(r'professor', ProfessorViewSet, basename='professor')
-router.register(r'students', StudentViewSet, basename='student')
-router.register(r'notification', NotificationViewSet, basename='notification')
-
-# URL customizada para deletar usuário pelo telegram_id
+from .views import RegisterView, LoginView, SendPollView
 urlpatterns = [
-    path('users/telegram/delete/', 
-         UserViewSet.as_view({'delete': 'delete_by_telegram_id'}), 
-         name='user-delete-by-telegram'),
-
-    path('users/students/register/<str:register>/', 
-         StudentViewSet.as_view({'get': 'retrieve_by_register'}), 
-         name='retrieve-by-register'),
-
-    path('users/telegram/<str:telegram_id>/', 
-         UserViewSet.as_view({'get': 'retrieve_by_telegram'}), 
-         name='user-by-telegram')
-] + router.urls
+    path("register/", RegisterView.as_view(), name="register"),
+    path("login/", LoginView.as_view(), name="login"),
+    path("send-poll/", SendPollView.as_view(), name="send_poll")
+]
