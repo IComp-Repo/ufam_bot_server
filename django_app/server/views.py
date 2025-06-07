@@ -10,6 +10,36 @@ import os
 
 TELEGRAM_API = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}"
 
+class TelegramWebhookView(APIView):
+    def post(self, request):
+        update = request.data
+        print(update)
+        message = update.get("message", {})
+        text = message.get("text", "")
+        chat_id = message.get("chat", {}).get("id")
+
+        print(chat_id)
+        print(message)
+
+        if text == "/start":
+            requests.post(f"{TELEGRAM_API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text": "Criar enquete",
+                                "web_app": {"url": "https://poll-miniapp.vercel.app/"}
+                            }
+                        ]
+                    ]
+                }
+            })
+
+        return Response({"status": "ok"})
+
+
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
