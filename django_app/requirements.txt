@@ -4,3 +4,4 @@ djangorestframework>=3.15.2,<3.16
 requests
 python-dotenv
 djangorestframework-simplejwt
+django-cors-headers
