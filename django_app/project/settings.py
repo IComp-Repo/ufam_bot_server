@@ -59,6 +59,11 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "https://poll-miniapp.vercel.app",
+    "http://localhost:3000",  # React, Next.js
+    "http://localhost:5173",  # Vite
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True
