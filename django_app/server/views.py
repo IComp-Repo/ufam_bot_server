@@ -8,18 +8,34 @@ from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer
 import requests
 import os
 
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
 TELEGRAM_API = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}"
 
+
 class TelegramWebhookView(APIView):
+    @swagger_auto_schema(
+        operation_description="Recebe atualizações do Telegram Bot.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'message': openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'text': openapi.Schema(type=openapi.TYPE_STRING),
+                        'chat': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            }
+        ),
+        responses={200: openapi.Response(description="Atualização recebida com sucesso.")}
+    )
     def post(self, request):
         update = request.data
-        print(update)
         message = update.get("message", {})
         text = message.get("text", "")
         chat_id = message.get("chat", {}).get("id")
-
-        print(chat_id)
-        print(message)
 
         if text == "/start":
             requests.post(f"{TELEGRAM_API}/sendMessage", json={
@@ -41,6 +57,15 @@ class TelegramWebhookView(APIView):
 
 
 class RegisterView(APIView):
+    @swagger_auto_schema(
+        operation_description="Cria um novo usuário professor.",
+        request_body=RegisterSerializer,
+        responses={
+            201: openapi.Response(description="Usuário registrado com sucesso."),
+            400: "Dados inválidos.",
+            403: "Somente professores podem se cadastrar."
+        }
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -56,7 +81,16 @@ class RegisterView(APIView):
             }, status=201)
         return Response(serializer.errors, status=400)
 
+
 class LoginView(APIView):
+    @swagger_auto_schema(
+        operation_description="Autentica um usuário e retorna um token JWT.",
+        request_body=LoginSerializer,
+        responses={
+            200: openapi.Response(description="Login realizado com sucesso."),
+            401: "Credenciais inválidas."
+        }
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -75,9 +109,19 @@ class LoginView(APIView):
                 pass
         return Response({"error": "Credenciais inválidas."}, status=401)
 
+
 class SendPollView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_description="Envia uma enquete para um grupo do Telegram.",
+        request_body=SendPollSerializer,
+        responses={
+            200: openapi.Response(description="Poll enviada com sucesso!"),
+            400: "Erro de validação.",
+            500: "Erro ao enviar a Poll."
+        }
+    )
     def post(self, request):
         serializer = SendPollSerializer(data=request.data)
         if serializer.is_valid():

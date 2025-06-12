@@ -55,9 +55,11 @@ Para mudança dentro da aplicação, execute:
 ```bash
 docker-compose up 
 ```
-### Acessando a aplicação
+### Acessando a aplicação e vizualizando as rotas de api
 
 Após inicializar, a aplicação estará disponível em:
 - API: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+
+- SWAGGER: [https://bot-telegram-test-server1.onrender.com/swagger/](https://bot-telegram-test-server1.onrender.com/swagger/)
 
 
