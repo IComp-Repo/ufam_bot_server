@@ -5,3 +5,5 @@ requests
 python-dotenv
 djangorestframework-simplejwt
 django-cors-headers
+drf-yasg>=1.21.6,<2
+
