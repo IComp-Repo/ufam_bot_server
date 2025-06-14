@@ -59,7 +59,7 @@ docker-compose up
 
 Após inicializar, a aplicação estará disponível em:
 - API LOCAL: [http://127.0.0.1:8000/](http://127.0.0.1:8000/) 
-- API PROD : [https://bot-telegram-test-server1.onrender.com/swagger/](https://bot-telegram-test-server1.onrender.com/swagger/)
+- API PROD : [https://bot-telegram-test-server1.onrender.com/swagger/](https://bot-telegram-test-server1.onrender.com/)
 - SWAGGER: [https://bot-telegram-test-server1.onrender.com/swagger/](https://bot-telegram-test-server1.onrender.com/swagger/)
 
 

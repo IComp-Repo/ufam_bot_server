@@ -14,8 +14,6 @@ from drf_yasg import openapi
 TELEGRAM_API = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}"
 
 
-
-
 class TelegramWebhookView(APIView):
     @swagger_auto_schema(
         operation_description="Recebe atualizações do Telegram Bot.",
@@ -33,8 +31,10 @@ class TelegramWebhookView(APIView):
         ),
         responses={200: openapi.Response(description="Atualização recebida com sucesso.")}
     )
+
     def post(self, request):
         update = request.data
+        print("", update)
         message = update.get("message", {})
         text = message.get("text", "")
         chat_id = message.get("chat", {}).get("id")
@@ -56,9 +56,6 @@ class TelegramWebhookView(APIView):
             })
 
         return Response({"status": "ok"})
-
-
-
 
 
 class RegisterView(APIView):
@@ -118,6 +115,7 @@ class LoginView(APIView):
             401: "Credenciais inválidas."
         }
     )
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
 
@@ -158,8 +156,6 @@ class LoginView(APIView):
         }, status=status.HTTP_200_OK)
     
 
-
-  
 class SendPollView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -172,6 +168,7 @@ class SendPollView(APIView):
             500: "Erro ao enviar a Poll."
         }
     )
+
     def post(self, request):
         serializer = SendPollSerializer(data=request.data)
 
@@ -215,5 +212,76 @@ class SendPollView(APIView):
             return Response({
                 "success": False,
                 "message": "Falha na comunicação com o Telegram.",
+                "errors": {"exception": str(e)}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+      
+class SendQuizView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Envia um quiz (enquete com resposta correta) para um grupo do Telegram.",
+        request_body=SendPollSerializer,
+        responses={
+            200: openapi.Response(description="Quiz enviado com sucesso."),
+            400: "Erro de validação.",
+            500: "Erro ao enviar para o Telegram."
+        }
+    )
+
+    def post(self, request):
+        serializer = SendPollSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response({
+                "success": False,
+                "message": "Erro de validação nos dados.",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        chat_id = serializer.validated_data['chatId']
+        question = serializer.validated_data['question']
+        options = serializer.validated_data['options']
+        correct_option = serializer.validated_data.get("correctOption")
+
+        if correct_option is None or correct_option < 0 or correct_option >= len(options):
+            return Response({
+                "success": False,
+                "message": "Índice da opção correta inválido.",
+                "errors": {"correctOption": "Informe um índice válido de opção correta."}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
+                "chat_id": chat_id,
+                "question": question,
+                "options": options,
+                "is_anonymous": False,
+                "type": "quiz",
+                "correct_option_id": correct_option,
+            })
+
+            if response.status_code == 200:
+                return Response({
+                    "success": True,
+                    "message": "Quiz enviado com sucesso.",
+                    "data": {
+                        "chat_id": chat_id,
+                        "question": question,
+                        "correctOption": correct_option
+                    }
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "message": "Erro na API do Telegram.",
+                "errors": response.json()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except requests.RequestException as e:
+            return Response({
+                "success": False,
+                "message": "Erro de conexão com o Telegram.",
                 "errors": {"exception": str(e)}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
