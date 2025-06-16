@@ -57,6 +57,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://bot-telegram-test-server1.onrender.com'
+]
+
 CORS_ALLOWED_ORIGINS = [
     'https://bot-telegram-test-server1.onrender.com',
     "https://poll-miniapp.vercel.app",
