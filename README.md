@@ -20,7 +20,14 @@ cd .\bot_telegram_test_server\
 
 Dentro da pasta chamada dotenv_files renomear o arquivo .env-example para .env
 ```bash
-# fake secret key
+# Credenciais do Superusuário para Desenvolvimento
+DJANGO_SUPERUSER_PASSWORD='django_superuser_password'
+DJANGO_SUPERUSER_EMAIL='django_superuser_email'
+
+# Telegram Bot Environment Variables Example
+TELEGRAM_BOT_TOKEN="token"
+
+# Fake secret key
 SECRET_KEY="bot!_telegram!_env!_!@#"
 
 # 0 False, 1 True
@@ -29,7 +36,7 @@ DEBUG="1"
 # Comma Separated values
 ALLOWED_HOSTS="127.0.0.1, localhost"
 
-# fake values
+# Fake values
 DB_ENGINE="django.db.backends.postgresql"
 POSTGRES_DB="bot_database"
 POSTGRES_USER="bot_user"
