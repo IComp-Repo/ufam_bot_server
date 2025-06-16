@@ -58,7 +58,7 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'bot-telegram-test-server1.onrender.com',
+    'https://bot-telegram-test-server1.onrender.com',
     "https://poll-miniapp.vercel.app",
     "http://localhost:3000",  # React, Next.js
     "http://localhost:5173",  # Vite
