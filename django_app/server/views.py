@@ -4,7 +4,7 @@ from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 from .models import PollUser
-from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer
+from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer
 import requests
 import os
 
@@ -172,6 +172,8 @@ class SendPollView(APIView):
     def post(self, request):
         serializer = SendPollSerializer(data=request.data)
 
+        print(serializer.data)
+
         if not serializer.is_valid():
             return Response({
                 "success": False,
@@ -215,73 +217,77 @@ class SendPollView(APIView):
                 "errors": {"exception": str(e)}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
-      
+    
 class SendQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Envia um quiz (enquete com resposta correta) para um grupo do Telegram.",
-        request_body=SendPollSerializer,
+        operation_description="Envia múltiplas perguntas tipo quiz para um grupo do Telegram.",
+        request_body=SendQuizSerializer,
         responses={
-            200: openapi.Response(description="Quiz enviado com sucesso."),
+            200: openapi.Response(description="Quizzes enviados com sucesso."),
             400: "Erro de validação.",
             500: "Erro ao enviar para o Telegram."
         }
     )
-
     def post(self, request):
-        serializer = SendPollSerializer(data=request.data)
+        serializer = SendQuizSerializer(data=request.data)
+
 
         if not serializer.is_valid():
             return Response({
                 "success": False,
-                "message": "Erro de validação nos dados.",
+                "message": "Erro de validação nos dados enviados.",
                 "errors": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
         chat_id = serializer.validated_data['chatId']
-        question = serializer.validated_data['question']
-        options = serializer.validated_data['options']
-        correct_option = serializer.validated_data.get("correctOption")
+        questions = serializer.validated_data['questions']
+        results = []
 
-        if correct_option is None or correct_option < 0 or correct_option >= len(options):
-            return Response({
-                "success": False,
-                "message": "Índice da opção correta inválido.",
-                "errors": {"correctOption": "Informe um índice válido de opção correta."}
-            }, status=status.HTTP_400_BAD_REQUEST)
+        for quiz in questions:
+            question = quiz['question']
+            options = quiz['options']
+            correct_option = quiz['correctOption']
 
-        try:
-            response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
-                "chat_id": chat_id,
-                "question": question,
-                "options": options,
-                "is_anonymous": False,
-                "type": "quiz",
-                "correct_option_id": correct_option,
-            })
+            if correct_option >= len(options):
+                results.append({
+                    "question": question,
+                    "status": "error",
+                    "message": "Índice da opção correta inválido."
+                })
+                continue
 
-            if response.status_code == 200:
-                return Response({
-                    "success": True,
-                    "message": "Quiz enviado com sucesso.",
-                    "data": {
-                        "chat_id": chat_id,
+            try:
+                response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
+                    "chat_id": chat_id,
+                    "question": question,
+                    "options": options,
+                    "is_anonymous": False,
+                    "type": "quiz",
+                    "correct_option_id": correct_option,
+                })
+
+                if response.status_code == 200:
+                    results.append({
                         "question": question,
-                        "correctOption": correct_option
-                    }
-                }, status=status.HTTP_200_OK)
+                        "status": "success"
+                    })
+                else:
+                    results.append({
+                        "question": question,
+                        "status": "error",
+                        "message": response.json()
+                    })
+            except requests.RequestException as e:
+                results.append({
+                    "question": question,
+                    "status": "error",
+                    "message": str(e)
+                })
 
-            return Response({
-                "success": False,
-                "message": "Erro na API do Telegram.",
-                "errors": response.json()
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        except requests.RequestException as e:
-            return Response({
-                "success": False,
-                "message": "Erro de conexão com o Telegram.",
-                "errors": {"exception": str(e)}
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({
+            "success": True,
+            "message": "Envio de quizzes finalizado.",
+            "results": results
+        }, status=status.HTTP_200_OK)
