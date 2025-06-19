@@ -31,4 +31,13 @@ class SendPollSerializer(serializers.Serializer):
     correctOption = serializers.IntegerField(required=False, min_value=0)
 
 
+class SingleQuizSerializer(serializers.Serializer):
+    question = serializers.CharField()
+    options = serializers.ListField(
+        child=serializers.CharField(), min_length=2, max_length=10
+    )
+    correctOption = serializers.IntegerField(min_value=0)
 
+class SendQuizSerializer(serializers.Serializer):
+    chatId = serializers.CharField()
+    questions = SingleQuizSerializer(many=True)
