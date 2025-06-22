@@ -171,9 +171,11 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = 'server.PollUser'
 
-CELERY_BROKER_URL = 'redis://redis:6379/0'
+# Celery settings
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+
 
 
 # Telegram Bot settings
