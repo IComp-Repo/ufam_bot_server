@@ -13,6 +13,24 @@ services:
       - ./dotenv_files/.env
     depends_on:
       - psql
+      - redis
+  celery:
+    build:
+      context: .
+    command: celery -A project worker -l info
+    volumes:
+      - ./django_app:/django_app
+    env_file:
+      - ./dotenv_files/.env
+    depends_on:
+      - django_app
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
   psql:
     container_name: psql
     image: postgres:13-alpine

@@ -11,7 +11,19 @@ import os
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-TELEGRAM_API = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}"
+from .tasks import send_quiz_task
+from datetime import datetime
+from django.utils.timezone import make_aware
+from django.conf import settings
+
+
+class PingView(APIView):
+    @swagger_auto_schema(
+        operation_description="Endpoint de monitoramento para manter o servidor acordado.",
+        responses={200: openapi.Response(description="Servidor ativo.")}
+    )
+    def get(self, request):
+        return Response({"data": {"status": "alive"}})
 
 
 class TelegramWebhookView(APIView):
@@ -32,15 +44,15 @@ class TelegramWebhookView(APIView):
         responses={200: openapi.Response(description="Atualização recebida com sucesso.")}
     )
 
+
     def post(self, request):
         update = request.data
-        print("", update)
         message = update.get("message", {})
         text = message.get("text", "")
         chat_id = message.get("chat", {}).get("id")
 
         if text == "/start":
-            requests.post(f"{TELEGRAM_API}/sendMessage", json={
+            requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
                 "reply_markup": {
@@ -55,7 +67,7 @@ class TelegramWebhookView(APIView):
                 }
             })
 
-        return Response({"status": "ok"})
+        return Response({"data": {"status": "ok"}})
 
 
 class RegisterView(APIView):
@@ -69,40 +81,42 @@ class RegisterView(APIView):
         }
     )
 
+
     def post(self, request):
         data = request.data
-        print("Dados recebidos no registro:", data)
-
         serializer = RegisterSerializer(data=data)
-        
+
         if not serializer.is_valid():
-            print("Erros de validação:", serializer.errors)
             return Response({
-                "success": False,
-                "message": "Erro na validação dos dados.",
-                "errors": serializer.errors
+                "data": {
+                    "success": False,
+                    "message": "Erro na validação dos dados.",
+                    "errors": serializer.errors
+                }
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         if not serializer.validated_data.get('is_professor'):
             return Response({
-                "success": False,
-                "message": "Somente professores podem se cadastrar.",
-                "errors": {"is_professor": ["Permissão negada para este tipo de usuário."]}
+                "data": {
+                    "success": False,
+                    "message": "Somente professores podem se cadastrar.",
+                    "errors": {"is_professor": ["Permissão negada para este tipo de usuário."]}
+                }
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
         user = serializer.save()
         refresh = RefreshToken.for_user(user)
-        
+
         return Response({
-            "success": True,
-            "message": "Usuário registrado com sucesso.",
             "data": {
-                "access_token": str(refresh.access_token),
-                "refresh_token": str(refresh)
+                "success": True,
+                "message": "Usuário registrado com sucesso.",
+                "tokens": {
+                    "access_token": str(refresh.access_token),
+                    "refresh_token": str(refresh)
+                }
             }
         }, status=status.HTTP_201_CREATED)
-
-
 
 
 class LoginView(APIView):
@@ -116,14 +130,17 @@ class LoginView(APIView):
         }
     )
 
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
 
         if not serializer.is_valid():
             return Response({
-                "success": False,
-                "message": "Erro na validação dos dados.",
-                "errors": serializer.errors
+                "data": {
+                    "success": False,
+                    "message": "Erro na validação dos dados.",
+                    "errors": serializer.errors
+                }
             }, status=status.HTTP_400_BAD_REQUEST)
 
         email = serializer.validated_data['email']
@@ -133,28 +150,34 @@ class LoginView(APIView):
             user = PollUser.objects.get(email=email)
         except PollUser.DoesNotExist:
             return Response({
-                "success": False,
-                "message": "Credenciais inválidas.",
-                "errors": {"email": ["Usuário não encontrado."]}
+                "data": {
+                    "success": False,
+                    "message": "Credenciais inválidas.",
+                    "errors": {"email": ["Usuário não encontrado."]}
+                }
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         if not check_password(password, user.password):
             return Response({
-                "success": False,
-                "message": "Credenciais inválidas.",
-                "errors": {"password": ["Senha incorreta."]}
+                "data": {
+                    "success": False,
+                    "message": "Credenciais inválidas.",
+                    "errors": {"password": ["Senha incorreta."]}
+                }
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         refresh = RefreshToken.for_user(user)
         return Response({
-            "success": True,
-            "message": "Login realizado com sucesso.",
             "data": {
-                "access_token": str(refresh.access_token),
-                "refresh_token": str(refresh)
+                "success": True,
+                "message": "Login realizado com sucesso.",
+                "tokens": {
+                    "access_token": str(refresh.access_token),
+                    "refresh_token": str(refresh)
+                }
             }
         }, status=status.HTTP_200_OK)
-    
+
 
 class SendPollView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -169,16 +192,17 @@ class SendPollView(APIView):
         }
     )
 
+    
     def post(self, request):
         serializer = SendPollSerializer(data=request.data)
 
-        print(serializer.data)
-
         if not serializer.is_valid():
             return Response({
-                "success": False,
-                "message": "Erro de validação nos dados enviados.",
-                "errors": serializer.errors
+                "data": {
+                    "success": False,
+                    "message": "Erro de validação nos dados enviados.",
+                    "errors": serializer.errors
+                }
             }, status=status.HTTP_400_BAD_REQUEST)
 
         chat_id = serializer.validated_data['chatId']
@@ -186,7 +210,7 @@ class SendPollView(APIView):
         options = serializer.validated_data['options']
 
         try:
-            response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
+            response = requests.post(f"{settings.TELEGRAM_API}/sendPoll", json={
                 "chat_id": chat_id,
                 "question": question,
                 "options": options,
@@ -195,37 +219,43 @@ class SendPollView(APIView):
 
             if response.status_code == 200:
                 return Response({
-                    "success": True,
-                    "message": "Enquete enviada com sucesso.",
                     "data": {
-                        "chat_id": chat_id,
-                        "question": question,
-                        "options": options
+                        "success": True,
+                        "message": "Enquete enviada com sucesso.",
+                        "poll": {
+                            "chat_id": chat_id,
+                            "question": question,
+                            "options": options
+                        }
                     }
                 }, status=status.HTTP_200_OK)
             else:
                 return Response({
-                    "success": False,
-                    "message": "Erro na API do Telegram.",
-                    "errors": response.json()
+                    "data": {
+                        "success": False,
+                        "message": "Erro na API do Telegram.",
+                        "errors": response.json()
+                    }
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except requests.RequestException as e:
             return Response({
-                "success": False,
-                "message": "Falha na comunicação com o Telegram.",
-                "errors": {"exception": str(e)}
+                "data": {
+                    "success": False,
+                    "message": "Falha na comunicação com o Telegram.",
+                    "errors": {"exception": str(e)}
+                }
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    
+
+
 class SendQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Envia múltiplas perguntas tipo quiz para um grupo do Telegram.",
+        operation_description="Envia múltiplas perguntas tipo quiz para um grupo do Telegram. Pode ser agendado.",
         request_body=SendQuizSerializer,
         responses={
-            200: openapi.Response(description="Quizzes enviados com sucesso."),
+            200: openapi.Response(description="Quizzes enviados ou agendados com sucesso."),
             400: "Erro de validação.",
             500: "Erro ao enviar para o Telegram."
         }
@@ -233,61 +263,43 @@ class SendQuizView(APIView):
     def post(self, request):
         serializer = SendQuizSerializer(data=request.data)
 
-
         if not serializer.is_valid():
             return Response({
-                "success": False,
-                "message": "Erro de validação nos dados enviados.",
-                "errors": serializer.errors
+                "data": {
+                    "success": False,
+                    "message": "Erro de validação nos dados enviados.",
+                    "errors": serializer.errors
+                }
             }, status=status.HTTP_400_BAD_REQUEST)
 
         chat_id = serializer.validated_data['chatId']
         questions = serializer.validated_data['questions']
-        results = []
+        schedule_date = serializer.validated_data.get('schedule_date')
+        schedule_time = serializer.validated_data.get('schedule_time')
 
-        for quiz in questions:
-            question = quiz['question']
-            options = quiz['options']
-            correct_option = quiz['correctOption']
-
-            if correct_option >= len(options):
-                results.append({
-                    "question": question,
-                    "status": "error",
-                    "message": "Índice da opção correta inválido."
-                })
-                continue
-
+        if schedule_date and schedule_time:
             try:
-                response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
-                    "chat_id": chat_id,
-                    "question": question,
-                    "options": options,
-                    "is_anonymous": False,
-                    "type": "quiz",
-                    "correct_option_id": correct_option,
-                })
-
-                if response.status_code == 200:
-                    results.append({
-                        "question": question,
-                        "status": "success"
-                    })
-                else:
-                    results.append({
-                        "question": question,
-                        "status": "error",
-                        "message": response.json()
-                    })
-            except requests.RequestException as e:
-                results.append({
-                    "question": question,
-                    "status": "error",
-                    "message": str(e)
-                })
-
-        return Response({
-            "success": True,
-            "message": "Envio de quizzes finalizado.",
-            "results": results
-        }, status=status.HTTP_200_OK)
+                scheduled_datetime = make_aware(datetime.combine(schedule_date, schedule_time))
+                send_quiz_task.apply_async((chat_id, questions), eta=scheduled_datetime)
+                return Response({
+                    "data": {
+                        "success": True,
+                        "message": f"Quizzes agendados para {scheduled_datetime.strftime('%d/%m/%Y %H:%M')}."
+                    }
+                }, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({
+                    "data": {
+                        "success": False,
+                        "message": "Erro ao agendar envio dos quizzes.",
+                        "errors": str(e)
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            send_quiz_task.delay(chat_id, questions)
+            return Response({
+                "data": {
+                    "success": True,
+                    "message": "Quizzes enviados imediatamente."
+                }
+            }, status=status.HTTP_200_OK)
