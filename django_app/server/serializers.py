@@ -38,6 +38,10 @@ class SingleQuizSerializer(serializers.Serializer):
     )
     correctOption = serializers.IntegerField(min_value=0)
 
+
 class SendQuizSerializer(serializers.Serializer):
     chatId = serializers.CharField()
-    questions = SingleQuizSerializer(many=True)
+    questions = serializers.ListField()
+    schedule_date = serializers.DateField(required=False)
+    schedule_time = serializers.TimeField(required=False)
+
