@@ -13,7 +13,7 @@ def send_quiz_task(chat_id, questions):
         correct_option = quiz['correctOption']
 
         try:
-            requests.post(f"{TELEGRAM_API}/sendPoll", json={
+            response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
                 "chat_id": chat_id,
                 "question": question,
                 "options": options,
@@ -21,7 +21,7 @@ def send_quiz_task(chat_id, questions):
                 "type": "quiz",
                 "correct_option_id": correct_option,
             })
-
+            
             results.append({
                 "question": question,
                 "status": "success" if response.status_code == 200 else "error",
