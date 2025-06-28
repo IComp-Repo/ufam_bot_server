@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PollUser
+from .models import PollUser, Group
 from django.contrib.auth.password_validation import validate_password
 
 
@@ -45,3 +45,11 @@ class SendQuizSerializer(serializers.Serializer):
     schedule_date = serializers.DateField(required=False)
     schedule_time = serializers.TimeField(required=False)
 
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['chat_id', 'fetch_date', 'title']
+
+class BindGroupSerializer(serializers.Serializer):
+    telegram_id = serializers.CharField()
+    chat_id = serializers.CharField()
