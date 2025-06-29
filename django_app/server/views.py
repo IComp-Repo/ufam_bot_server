@@ -76,11 +76,14 @@ class TelegramWebhookView(APIView):
 
             chat_title = chat.get("title")
 
-            requests.post(f'https://bot-telegram-test-server1.onrender.com/swagger/api/bind-group/', json={
+            bind_response = requests.post(f'https://bot-telegram-test-server1.onrender.com/swagger/api/bind-group/', json={
                 'telegram_id': sender_id,
                 'chat_id': chat_id,
                 'chat_title': chat_title
             })
+
+            if not bind_response.ok:
+                return Response({"status": "bind failed"}, status=bind_response.status_code)
 
         return Response({"data": {"status": "ok"}})
 
