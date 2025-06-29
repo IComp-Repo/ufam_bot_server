@@ -1,9 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterView, LoginView, SendPollView, SendQuizView, TelegramWebhookView, PingView, GroupViewSet, BindGroupView
-
-router = DefaultRouter()
-router.register(r'groups', GroupViewSet, basename='group')
+from .views import RegisterView, LoginView, SendPollView, SendQuizView, TelegramWebhookView, PingView, BindGroupView
 
 urlpatterns = [
 
@@ -11,8 +8,7 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("send-poll/", SendPollView.as_view(), name="send_poll"),
     path('send-quiz/', SendQuizView.as_view(), name='send_quiz'),
-    path("bind/group/", BindGroupView.as_view(), name="bind_group"),
+    path("bind-group/", BindGroupView.as_view(), name="bind_group"),
     path("telegram/webhook/", TelegramWebhookView.as_view(), name="telegram-webhook"),
     path("ping/", PingView.as_view(), name="ping"),
-
 ]

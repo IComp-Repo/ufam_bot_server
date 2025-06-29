@@ -1,11 +1,10 @@
 from rest_framework.views import APIView
-from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 from .models import PollUser, Group, PollUserGroup
-from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, GroupSerializer, BindGroupSerializer
+from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, BindGroupSerializer
 import requests
 import os
 
@@ -77,13 +76,10 @@ class TelegramWebhookView(APIView):
 
             chat_title = chat.get("title")
 
-            requests.patch(f'https://bot-telegram-test-server1.onrender.com/swagger/api/groups/{chat_id}/', json={
-                'title': chat_title
-            })
-
-            requests.post(f'https://bot-telegram-test-server1.onrender.com/swagger/api/bind/group/', json={
+            requests.post(f'https://bot-telegram-test-server1.onrender.com/swagger/api/bind-group/', json={
                 'telegram_id': sender_id,
-                'chat_id': chat_id
+                'chat_id': chat_id,
+                'chat_title': chat_title
             })
 
         return Response({"data": {"status": "ok"}})
@@ -324,11 +320,6 @@ class SendQuizView(APIView):
             }, status=status.HTTP_200_OK)
 
 
-class GroupViewSet(ModelViewSet):
-    queryset = Group.objects.all()
-    serializer_class = GroupSerializer
-    lookup_field = 'chat_id'
-
 class BindGroupView(APIView):
     @swagger_auto_schema(
         operation_description="Vincula um grupo do Telegram a um professor e/ou staff usando telegram_id e chat_id.",
@@ -347,7 +338,6 @@ class BindGroupView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         telegram_id = serializer.validated_data['telegram_id']
-        chat_id = serializer.validated_data['chat_id']
 
         try:
             user = PollUser.objects.get(telegram_id=telegram_id)
@@ -357,13 +347,16 @@ class BindGroupView(APIView):
                 "message": "Usuário não cadastrado"
             }, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            group = Group.objects.get(chat_id=chat_id)
-        except Group.DoesNotExist:
-            return Response({
-                "success": False,
-                "message": "Grupo não cadastrado"
-            }, status=status.HTTP_404_NOT_FOUND)
+        chat_id = serializer.validated_data['chat_id']
+        chat_title = serializer.validated_data['chat_title']
+
+        group, _ = Group.objects.get_or_create(
+                chat_id=chat_id,
+                defaults={'title': chat_title}
+            )
+        if group.title != chat_title:
+            group.title = chat_title
+            group.save()
 
         if not (user.is_professor or user.is_staff):
             return Response({
@@ -375,7 +368,7 @@ class BindGroupView(APIView):
 
         return Response({
             "success": True,
-            "message": "Grupo vinculado com sucesso" if created else "Vínculo já existente",
+            "message": "Grupo vinculado com sucesso" if created else "Vínculo existente. Atualizando dados do grupo.",
             "data": {
                 "bind_date": poll_user_group.bind_date
             }

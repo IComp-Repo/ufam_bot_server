@@ -37,7 +37,7 @@ class PollUser(AbstractBaseUser, PermissionsMixin):
         return self.email
 
 class Group(models.Model):
-    chat_id = models.BigIntegerField(unique=True)
+    chat_id = models.CharField(unique=True)
     fetch_date = models.DateTimeField(auto_now_add=True)
     title = models.CharField(max_length=255)
 

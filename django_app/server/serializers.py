@@ -1,12 +1,12 @@
 from rest_framework import serializers
-from .models import PollUser, Group
+from .models import PollUser
 from django.contrib.auth.password_validation import validate_password
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = PollUser
-        fields = ['email', 'password', 'register', 'is_professor']
+        fields = ['email', 'password', 'register', 'telegram_id', 'is_professor']
         extra_kwargs = {'password': {'write_only': True}}
 
     def validate_password(self, value):
@@ -45,11 +45,7 @@ class SendQuizSerializer(serializers.Serializer):
     schedule_date = serializers.DateField(required=False)
     schedule_time = serializers.TimeField(required=False)
 
-class GroupSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Group
-        fields = ['chat_id', 'fetch_date', 'title']
-
 class BindGroupSerializer(serializers.Serializer):
     telegram_id = serializers.CharField()
     chat_id = serializers.CharField()
+    chat_title = serializers.CharField()
