@@ -76,7 +76,7 @@ class TelegramWebhookView(APIView):
 
             chat_title = chat.get("title")
 
-            bind_response = requests.post(f'https://bot-telegram-test-server1.onrender.com/swagger/api/bind-group/', json={
+            bind_response = requests.post(f'https://bot-telegram-test-server1.onrender.com/api/bind-group/', json={
                 'telegram_id': sender_id,
                 'chat_id': chat_id,
                 'chat_title': chat_title
