@@ -83,7 +83,16 @@ class TelegramWebhookView(APIView):
             })
 
             if not bind_response.ok:
-                return Response({"status": "bind failed"}, status=bind_response.status_code)
+                requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": f"Erro! Não foi possível salvar o grupo {chat_title}.",
+                })
+                return Response({"data": {"status"=bind_response.status_code}})
+            
+            requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"Sucesso! O grupo {chat_title} foi salvo.",
+            })
 
         return Response({"data": {"status": "ok"}})
 
