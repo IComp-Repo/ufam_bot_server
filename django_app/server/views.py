@@ -389,6 +389,12 @@ class BindGroupView(APIView):
 
 class UserGroupsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Lista todos os grupos vinculados ao usuário autenticado.",
+        responses={200: openapi.Response(description="Lista de grupos vinculados.")}
+    )
+
     def get(self, request):
         user = request.user
         groups = PollUser.objects.list_groups(user)
