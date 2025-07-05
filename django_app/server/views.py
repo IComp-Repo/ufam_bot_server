@@ -385,3 +385,12 @@ class BindGroupView(APIView):
                 "bind_date": poll_user_group.bind_date
             }
         }, status=status.HTTP_200_OK)
+
+
+class UserGroupsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        user = request.user
+        groups = PollUser.objects.list_groups(user)
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data)

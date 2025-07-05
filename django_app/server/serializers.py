@@ -49,3 +49,8 @@ class BindGroupSerializer(serializers.Serializer):
     telegram_id = serializers.CharField()
     chat_id = serializers.CharField()
     chat_title = serializers.CharField()
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['id', 'title', 'chat_id', 'fetch_date']

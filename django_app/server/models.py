@@ -19,6 +19,9 @@ class PollUserManager(BaseUserManager):
     def bind_group(self, user, group):
         return PollUserGroup.objects.get_or_create(poll_user=user, group=group)
 
+    def list_groups(self, user):
+        return PollUserGroup.objects.filter(poll_user=user).select_related('group')
+
 
 class PollUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)

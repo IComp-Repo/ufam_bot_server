@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, LoginView, SendPollView, SendQuizView, TelegramWebhookView, PingView, BindGroupView
+from .views import RegisterView, LoginView, SendPollView, SendQuizView, TelegramWebhookView, PingView, BindGroupView, UserGroupsView
 
 urlpatterns = [
 
@@ -10,4 +10,5 @@ urlpatterns = [
     path("bind-group/", BindGroupView.as_view(), name="bind_group"),
     path("telegram/webhook/", TelegramWebhookView.as_view(), name="telegram-webhook"),
     path("ping/", PingView.as_view(), name="ping"),
+    path("user-groups/", UserGroupsView.as_view(), name="user-groups"),
 ]
