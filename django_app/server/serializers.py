@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PollUser
+from .models import PollUser, Group
 from django.contrib.auth.password_validation import validate_password
 
 

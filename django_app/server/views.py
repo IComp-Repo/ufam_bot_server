@@ -4,7 +4,7 @@ from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 from .models import PollUser, Group, PollUserGroup
-from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, BindGroupSerializer
+from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, GroupSerializer, BindGroupSerializer
 import requests
 import os
 
@@ -87,7 +87,7 @@ class TelegramWebhookView(APIView):
                     "chat_id": chat_id,
                     "text": f"Erro! Não foi possível salvar o grupo {chat_title}.",
                 })
-                return Response({"data": {"status"=bind_response.status_code}})
+                return Response({"data": {"status":bind_response.status_code}})
             
             requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
                 "chat_id": chat_id,
