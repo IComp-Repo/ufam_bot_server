@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
-from .models import PollUser
-from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer
+from .models import PollUser, Group, PollUserGroup
+from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, GroupSerializer, BindGroupSerializer
 import requests
 import os
 
@@ -49,7 +49,10 @@ class TelegramWebhookView(APIView):
         update = request.data
         message = update.get("message", {})
         text = message.get("text", "")
-        chat_id = message.get("chat", {}).get("id")
+        chat = message.get("chat", {})
+        chat_id = chat.get("id")
+        sender = message.get("from", {})
+        sender_id = sender.get('id')
 
         if text == "/start":
             requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
@@ -65,6 +68,30 @@ class TelegramWebhookView(APIView):
                         ]
                     ]
                 }
+            })
+
+        if text == "/bind":
+            if (chat_type := chat.get('type')) and chat_type != 'group':
+                return Response({"status": 'bad request'})
+
+            chat_title = chat.get("title")
+
+            bind_response = requests.post(f'https://bot-telegram-test-server1.onrender.com/api/bind-group/', json={
+                'telegram_id': sender_id,
+                'chat_id': chat_id,
+                'chat_title': chat_title
+            })
+
+            if not bind_response.ok:
+                requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": f"Erro! Não foi possível salvar o grupo {chat_title}.",
+                })
+                return Response({"data": {"status":bind_response.status_code}})
+            
+            requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"Sucesso! O grupo {chat_title} foi salvo.",
             })
 
         return Response({"data": {"status": "ok"}})
@@ -303,3 +330,73 @@ class SendQuizView(APIView):
                     "message": "Quizzes enviados imediatamente."
                 }
             }, status=status.HTTP_200_OK)
+
+
+class BindGroupView(APIView):
+    @swagger_auto_schema(
+        operation_description="Vincula um grupo do Telegram a um professor e/ou staff usando telegram_id e chat_id.",
+        request_body=BindGroupSerializer,
+        responses={
+            200: openapi.Response(description="Grupo vinculado com sucesso ou vínculo já existente."),
+            400: "Requisição inválida.",
+            403: "Usuário com permissões insuficientes para vincular grupos.",
+            404: "Usuário ou grupo não encontrados."
+        }
+    )
+    def post(self, request):
+        serializer = BindGroupSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        telegram_id = serializer.validated_data['telegram_id']
+
+        try:
+            user = PollUser.objects.get(telegram_id=telegram_id)
+        except PollUser.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Usuário não cadastrado"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        chat_id = serializer.validated_data['chat_id']
+        chat_title = serializer.validated_data['chat_title']
+
+        group, _ = Group.objects.get_or_create(
+                chat_id=chat_id,
+                defaults={'title': chat_title}
+            )
+        if group.title != chat_title:
+            group.title = chat_title
+            group.save()
+
+        if not (user.is_professor or user.is_staff):
+            return Response({
+                "success": False,
+                "message": f"Permissões insuficientes. Usuário não pode vincular grupos."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        poll_user_group, created = PollUser.objects.bind_group(user, group)
+
+        return Response({
+            "success": True,
+            "message": "Grupo vinculado com sucesso" if created else "Vínculo existente. Atualizando dados do grupo.",
+            "data": {
+                "bind_date": poll_user_group.bind_date
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class UserGroupsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Lista todos os grupos vinculados ao usuário autenticado.",
+        responses={200: openapi.Response(description="Lista de grupos vinculados.")}
+    )
+
+    def get(self, request):
+        user = request.user
+        groups = PollUser.objects.list_groups(user)
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data)
