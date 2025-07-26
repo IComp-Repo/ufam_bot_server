@@ -20,7 +20,7 @@ class PollUserManager(BaseUserManager):
         return PollUserGroup.objects.get_or_create(poll_user=user, group=group)
 
     def list_groups(self, user):
-        return PollUserGroup.objects.filter(poll_user=user).select_related('group')
+        return Group.objects.filter(pollusergroup__poll_user=user)
 
 
 class PollUser(AbstractBaseUser, PermissionsMixin):
