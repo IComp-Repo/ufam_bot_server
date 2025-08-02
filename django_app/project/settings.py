@@ -184,4 +184,4 @@ CELERY_TASK_SERIALIZER = 'json'
 
 # Telegram Bot settings
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+

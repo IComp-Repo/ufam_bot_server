@@ -16,6 +16,8 @@ from datetime import datetime
 from django.utils.timezone import make_aware
 from django.conf import settings
 
+# Telegram Bot settings 
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 class PingView(APIView):
     @swagger_auto_schema(
@@ -55,7 +57,7 @@ class TelegramWebhookView(APIView):
         sender_id = sender.get('id')
 
         if text == "/start":
-            requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+            requests.post(f"{TELEGRAM_API}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
                 "reply_markup": {
@@ -83,13 +85,13 @@ class TelegramWebhookView(APIView):
             })
 
             if not bind_response.ok:
-                requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+                requests.post(f"{TELEGRAM_API}/sendMessage", json={
                     "chat_id": chat_id,
                     "text": f"Erro! Não foi possível salvar o grupo {chat_title}.",
                 })
                 return Response({"data": {"status":bind_response.status_code}})
             
-            requests.post(f"{settings.TELEGRAM_API}/sendMessage", json={
+            requests.post(f"{TELEGRAM_API}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": f"Sucesso! O grupo {chat_title} foi salvo.",
             })
@@ -237,7 +239,7 @@ class SendPollView(APIView):
         options = serializer.validated_data['options']
 
         try:
-            response = requests.post(f"{settings.TELEGRAM_API}/sendPoll", json={
+            response = requests.post(f"{TELEGRAM_API}/sendPoll", json={
                 "chat_id": chat_id,
                 "question": question,
                 "options": options,
