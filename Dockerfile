@@ -1,49 +1,53 @@
 FROM python:3.11.3-alpine3.18
-LABEL maintainer="martinhoprata95@gmail.com"
+LABEL mantainer="martinhoprata95@gmail.com"
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ARG ENVIRONMENT=production
-ENV ENVIRONMENT=$ENVIRONMENT
+# Essa variável de ambiente é usada para controlar se o Python deve
+# gravar arquivos de bytecode (.pyc) no disco. 1 = Não, 0 = Sim
+ENV PYTHONDONTWRITEBYTECODE 1
 
+# Define que a saída do Python será exibida imediatamente no console ou em
+# outros dispositivos de saída, sem ser armazenada em buffer.
+# Em resumo, você verá os outputs do Python em tempo real.
+ENV PYTHONUNBUFFERED 1
+
+# Copia a pasta "django_app" e "scripts" para dentro do container.
 COPY django_app /django_app
 COPY scripts /scripts
 
+# Entra na pasta django_app no container
 WORKDIR /django_app
 
-# Dependências de sistema para Alpine
-RUN apk add --no-cache \
-  bash \
-  build-base \
-  libffi-dev \
-  jpeg-dev \
-  zlib-dev \
-  postgresql-dev \
-  musl-dev \
-  python3-dev \
-  dos2unix
-
-RUN python -m venv /venv && \
-    /venv/bin/pip install --upgrade pip && \
-    /venv/bin/pip install -r /django_app/requirements.txt && \
-    dos2unix /scripts/commands.sh
-
-RUN mkdir -p /data/web/static /data/web/media && \
-    chmod -R 755 /data/web/static /data/web/media && \
-    chmod +x /scripts/commands.sh
-
-# Somente produção: cria usuário seguro e ajusta permissões
-RUN if [ "$ENVIRONMENT" = "production" ]; then \
-      adduser --disabled-password --no-create-home duser && \
-      chown -R duser:duser /venv /data /scripts /django_app; \
-    fi
-
-ENV PATH="/scripts:/venv/bin:$PATH"
-
-# Somente produção: troca para usuário não-root
-# Em local, continua como root
-USER ${ENVIRONMENT:-production} = production ? duser : root
-
+# A porta 8000 estará disponível para conexões externas ao container
+# É a porta que vamos usar para o Django.
 EXPOSE 8000
 
+# RUN executa comandos em um shell dentro do container para construir a imagem.
+# O resultado da execução do comando é armazenado no sistema de arquivos da
+# imagem como uma nova camada.
+# Agrupar os comandos em um único RUN pode reduzir a quantidade de camadas da
+# imagem e torná-la mais eficiente.
+RUN python -m venv /venv && \
+  /venv/bin/pip install --upgrade pip && \
+  /venv/bin/pip install -r /django_app/requirements.txt && \
+  adduser --disabled-password --no-create-home duser && \
+  mkdir -p /data/web/static && \
+  mkdir -p /data/web/media && \
+  chown -R duser:duser /venv && \
+  chown -R duser:duser /data/web/static && \
+  chown -R duser:duser /data/web/media && \
+  chmod -R 755 /data/web/static && \
+  chmod -R 755 /data/web/media && \
+  chmod -R +x /scripts
+
+RUN apk add --no-cache dos2unix \
+  && dos2unix /scripts/commands.sh
+
+# Adiciona a pasta scripts e venv/bin
+# no $PATH do container.
+ENV PATH="/scripts:/venv/bin:$PATH"
+
+# Muda o usuário para duser
+USER duser
+
+# Executa o arquivo scripts/commands.sh
 CMD ["commands.sh"]
