@@ -17,6 +17,7 @@ from django.utils.timezone import make_aware
 from django.conf import settings
 
 # Telegram Bot settings 
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 class PingView(APIView):
