@@ -1,12 +1,14 @@
 #!/bin/sh
 set -e
 
-while ! nc -z $POSTGRES_HOST $POSTGRES_PORT; do
-  echo "Waiting for Postgres Database Startup ($POSTGRES_HOST $POSTGRES_PORT) ..."
+echo "Aguardando PostgreSQL ($PGHOST:$PGPORT)..."
+
+while ! nc -z "$PGHOST" "$PGPORT"; do
+  echo "Waiting for Postgres Database Startup ($PGHOST:$PGPORT) ..."
   sleep 2
 done
 
-echo "Postgres Database Started Successfully ($POSTGRES_HOST:$POSTGRES_PORT)"
+echo "Postgres Database Started Successfully ($PGHOST:$PGPORT)"
 
 echo "Coletando arquivos estáticos..."
 python manage.py collectstatic --noinput
