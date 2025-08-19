@@ -14,11 +14,8 @@ from drf_yasg import openapi
 from .tasks import send_quiz_task
 from datetime import datetime
 from django.utils.timezone import make_aware
-from django.conf import settings
+from project.settings.base import TELEGRAM_API
 
-# Telegram Bot settings 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 class PingView(APIView):
     @swagger_auto_schema(

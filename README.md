@@ -20,27 +20,27 @@ cd .\bot_telegram_test_server\
 
 Dentro da pasta chamada dotenv_files renomear o arquivo .env-example para .env
 ```bash
-# Credenciais do Superusuário para Desenvolvimento
-DJANGO_SUPERUSER_PASSWORD='django_superuser_password'
-DJANGO_SUPERUSER_EMAIL='django_superuser_email'
-
-# Telegram Bot Environment Variables Example
-TELEGRAM_BOT_TOKEN="token"
-
-# Fake secret key
-SECRET_KEY="bot!_telegram!_env!_!@#"
-
-# 0 False, 1 True
+DJANGO_ENV=dev
+SECRET_KEY="dev-secret"
 DEBUG="1"
+ALLOWED_HOSTS="127.0.0.1,localhost"
+CSRF_TRUSTED_ORIGINS="http://127.0.0.1:8000,http://localhost:8000"
 
-# Comma Separated values
-ALLOWED_HOSTS="127.0.0.1, localhost"
+DJANGO_SUPERUSER_EMAIL="admin@example.com"
+DJANGO_SUPERUSER_PASSWORD="admin123"
 
-# Fake values
+TELEGRAM_BOT_TOKEN="your-telegram-bot-token"
+
+# Redis local no compose
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/0
+CELERY_WORKER_CONCURRENCY=2
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP=true
+
 DB_ENGINE="django.db.backends.postgresql"
-POSTGRES_DB="bot_database"
-POSTGRES_USER="bot_user"
-POSTGRES_PASSWORD="bot_user_password"
+POSTGRES_DB="ufam_db"
+POSTGRES_USER="ufam_user"
+POSTGRES_PASSWORD="ufam_pass"
 POSTGRES_HOST="psql"
 POSTGRES_PORT="5432"
 ```

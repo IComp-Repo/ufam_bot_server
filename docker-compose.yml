@@ -1,40 +1,58 @@
 services:
-  django_app:
-    container_name: django_app
-    build:
-      context: .
-    ports:
-      - 8000:8000
-    volumes:
-      - ./django_app:/django_app
-      - ./data/web/static:/data/web/static/
-      - ./data/web/media:/data/web/media/
-    env_file:
-      - ./dotenv_files/.env
-    depends_on:
-      - psql
-      - redis
-  celery:
-    build:
-      context: .
-    command: celery -A project worker -l info
-    volumes:
-      - ./django_app:/django_app
-    env_file:
-      - ./dotenv_files/.env
-    depends_on:
-      - django_app
-      - redis
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
   psql:
     container_name: psql
     image: postgres:13-alpine
-    volumes:
-      - ./data/postgres/data:/var/lib/postgresql/data/
     env_file:
-      - ./dotenv_files/.env
+      - ./dotenv_files/.env.dev
     ports:
       - "5432:5432"
+    volumes:
+      - ./data/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  django_app:
+    container_name: django_app
+    build: .
+    env_file:
+      - ./dotenv_files/.env.dev
+    command: ["/scripts/entrypoint_web.sh"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./django_app:/django_app
+      - ./data/web/static:/data/web/static
+      - ./data/web/media:/data/web/media
+    depends_on:
+      psql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery:
+    container_name: celery
+    build: .
+    env_file:
+      - ./dotenv_files/.env.dev
+    command: ["/scripts/entrypoint_worker.sh"]
+    volumes:
+      - ./django_app:/django_app
+    depends_on:
+      psql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

@@ -1,11 +1,11 @@
 from celery import shared_task
 import requests
 from django.conf import settings
+from project.settings.base import TELEGRAM_API
 
 
 @shared_task
 def send_quiz_task(chat_id, questions):
-    TELEGRAM_API = settings.TELEGRAM_API
     results = []
     for quiz in questions:
         question = quiz['question']

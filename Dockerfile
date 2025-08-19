@@ -1,53 +1,51 @@
 FROM python:3.11.3-alpine3.18
-LABEL mantainer="martinhoprata95@gmail.com"
+LABEL maintainer="martinhoprata95@gmail.com"
 
-# Essa variável de ambiente é usada para controlar se o Python deve
-# gravar arquivos de bytecode (.pyc) no disco. 1 = Não, 0 = Sim
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/venv/bin:/scripts:${PATH}"
 
-# Define que a saída do Python será exibida imediatamente no console ou em
-# outros dispositivos de saída, sem ser armazenada em buffer.
-# Em resumo, você verá os outputs do Python em tempo real.
-ENV PYTHONUNBUFFERED 1
+# --------- SO deps ----------
+# build-deps: para compilar wheels (psycopg2, cryptography, etc.)
+# runtime-deps: libs necessárias em runtime + netcat para 'nc' + bash
+RUN apk add --no-cache \
+      bash \
+      netcat-openbsd \
+      libpq \
+      libffi \
+      openssl \
+    && apk add --no-cache --virtual .build-deps \
+      gcc \
+      musl-dev \
+      python3-dev \
+      postgresql-dev \
+      libffi-dev \
+      openssl-dev
 
-# Copia a pasta "django_app" e "scripts" para dentro do container.
+# --------- venv + pip deps (cache) ----------
+WORKDIR /django_app
+COPY django_app/requirements.txt /django_app/requirements.txt
+
+RUN python -m venv /venv && \
+    /venv/bin/pip install --upgrade pip && \
+    /venv/bin/pip install -r /django_app/requirements.txt
+
+# --------- app code + scripts ----------
 COPY django_app /django_app
 COPY scripts /scripts
 
-# Entra na pasta django_app no container
-WORKDIR /django_app
+# permissões + diretórios de static/media
+RUN adduser --disabled-password --no-create-home duser && \
+    mkdir -p /data/web/static /data/web/media && \
+    chown -R duser:duser /venv /data/web/static /data/web/media /django_app /scripts && \
+    chmod -R 755 /data/web/static /data/web/media && \
+    apk add --no-cache dos2unix && \
+    dos2unix /scripts/*.sh && \
+    chmod +x /scripts/*.sh && \
+    apk del .build-deps
 
-# A porta 8000 estará disponível para conexões externas ao container
-# É a porta que vamos usar para o Django.
 EXPOSE 8000
-
-# RUN executa comandos em um shell dentro do container para construir a imagem.
-# O resultado da execução do comando é armazenado no sistema de arquivos da
-# imagem como uma nova camada.
-# Agrupar os comandos em um único RUN pode reduzir a quantidade de camadas da
-# imagem e torná-la mais eficiente.
-RUN python -m venv /venv && \
-  /venv/bin/pip install --upgrade pip && \
-  /venv/bin/pip install -r /django_app/requirements.txt && \
-  adduser --disabled-password --no-create-home duser && \
-  mkdir -p /data/web/static && \
-  mkdir -p /data/web/media && \
-  chown -R duser:duser /venv && \
-  chown -R duser:duser /data/web/static && \
-  chown -R duser:duser /data/web/media && \
-  chmod -R 755 /data/web/static && \
-  chmod -R 755 /data/web/media && \
-  chmod -R +x /scripts
-
-RUN apk add --no-cache dos2unix \
-  && dos2unix /scripts/commands.sh
-
-# Adiciona a pasta scripts e venv/bin
-# no $PATH do container.
-ENV PATH="/scripts:/venv/bin:$PATH"
-
-# Muda o usuário para duser
 USER duser
 
-# Executa o arquivo scripts/commands.sh
-CMD ["commands.sh"]
+# Por padrão, chamaremos o entrypoint web; no compose dá pra sobrescrever.
+CMD ["bash", "-lc", "commands.sh"]
