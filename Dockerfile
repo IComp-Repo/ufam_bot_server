@@ -47,5 +47,4 @@ RUN adduser --disabled-password --no-create-home duser && \
 EXPOSE 8000
 USER duser
 
-# Por padrão, chamaremos o entrypoint web; no compose dá pra sobrescrever.
 CMD ["bash", "-lc", "commands.sh"]
