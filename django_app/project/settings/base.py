@@ -21,8 +21,24 @@ def get_list(name: str, default=None):
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
 DEBUG = get_bool("DEBUG", False)
 
-ALLOWED_HOSTS = get_list("ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
-CSRF_TRUSTED_ORIGINS = get_list("CSRF_TRUSTED_ORIGINS", [])
+ALLOWED_HOSTS = [
+    h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',')
+    if h.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-production-9089.up.railway.app'
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "https://poll-miniapp.vercel.app",
+    "http://localhost:3000",  # React, Next.js
+    "http://localhost:5173",  # Vite
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 INSTALLED_APPS = [
     'corsheaders',        
