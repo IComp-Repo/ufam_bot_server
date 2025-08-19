@@ -21,22 +21,34 @@ def get_list(name: str, default=None):
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
 DEBUG = get_bool("DEBUG", False)
 
-ALLOWED_HOSTS = [
-    h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',')
-    if h.strip()
-]
+# aceita múltiplos, com defaults seguros
+ALLOWED_HOSTS = get_list(
+    "ALLOWED_HOSTS",
+    [".up.railway.app", "localhost", "127.0.0.1"]
+)
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://web-production-9089.up.railway.app'
-]
+# precisa de esquema (https)
+CSRF_TRUSTED_ORIGINS = get_list(
+    "CSRF_TRUSTED_ORIGINS",
+    ["https://*.up.railway.app"]
+)
 
 CORS_ALLOWED_ORIGINS = [
+    "https://web-production-9089.up.railway.app",
     "https://poll-miniapp.vercel.app",
     "http://localhost:3000",  # React, Next.js
     "http://localhost:5173",  # Vite
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+
+# WhiteNoise: arquivos estáticos comprimidos com manifest
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# por estar atrás de proxy (Railway)
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -171,5 +183,4 @@ SIMPLE_JWT = {
 AUTH_USER_MODEL = 'server.PollUser'
 
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
