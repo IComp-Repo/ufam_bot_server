@@ -1,29 +1,95 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, permissions
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.hashers import check_password
-from .models import PollUser, Group, PollUserGroup
-from .serializers import RegisterSerializer, LoginSerializer, SendPollSerializer, SendQuizSerializer, GroupSerializer, BindGroupSerializer
-import requests
 import os
+from datetime import datetime
 
-from drf_yasg.utils import swagger_auto_schema
+import requests
+
+from django.contrib.auth.hashers import check_password
+from django.utils.timezone import make_aware
+
+from rest_framework import status, permissions
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+
 from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+
+from .models import PollUser, Group, PollUserGroup
+from .serializers import (
+    BindGroupSerializer,
+    GroupSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    SendPollSerializer,
+    SendQuizSerializer,
+)
 
 from .tasks import send_quiz_task
-from datetime import datetime
-from django.utils.timezone import make_aware
+
 from project.settings.base import TELEGRAM_API
 
 
-class PingView(APIView):
-    @swagger_auto_schema(
-        operation_description="Endpoint de monitoramento para manter o servidor acordado.",
-        responses={200: openapi.Response(description="Servidor ativo.")}
+
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"   # em produção: true (HTTPS)
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")                  # Sempre none pois nosso front e back estão em domínios diferentes
+REFRESH_COOKIE_PATH = os.getenv("REFRESH_COOKIE_PATH", "/api/auth/token/refresh/")
+REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
+REFRESH_TTL_DAYS = int(os.getenv("REFRESH_TTL_DAYS", "14"))
+
+
+def set_refresh_cookie(response: Response, refresh_str: str):
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_str,
+        max_age=REFRESH_TTL_DAYS * 24 * 3600,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path=REFRESH_COOKIE_PATH,  # cookie só é enviado nessa rota
     )
-    def get(self, request):
-        return Response({"data": {"status": "alive"}})
+
+class CookieTokenRefreshView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Gera um novo access token lendo o refresh do cookie HttpOnly.",
+        responses={200: openapi.Response(description="Token renovado com sucesso.")}
+    )
+    def post(self, request):
+        refresh_from_cookie = request.COOKIES.get(REFRESH_COOKIE_NAME)
+
+        if not refresh_from_cookie:
+            return Response({
+                "data": {
+                    "success": False,
+                    "message": "Refresh token ausente.",
+                    "errors": {"refresh": ["Cookie não encontrado."]}
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            token = RefreshToken(refresh_from_cookie)
+            new_access = str(token.access_token)
+
+            return Response({
+                "data": {
+                    "success": True,
+                    "message": "Token renovado com sucesso.",
+                    "tokens": {
+                        "access_token": new_access
+                    }
+                }
+            }, status=status.HTTP_200_OK)
+
+        except TokenError:
+            return Response({
+                "data": {
+                    "success": False,
+                    "message": "Refresh inválido ou expirado.",
+                    "errors": {"refresh": ["Token inválido/expirado."]}
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class TelegramWebhookView(APIView):
@@ -99,111 +165,117 @@ class TelegramWebhookView(APIView):
 
 class RegisterView(APIView):
     @swagger_auto_schema(
-        operation_description="Cria um novo usuário professor.",
+        operation_description="Cria um novo usuário.",
         request_body=RegisterSerializer,
-        responses={
-            201: openapi.Response(description="Usuário registrado com sucesso."),
-            400: "Dados inválidos.",
-            403: "Somente professores podem se cadastrar."
-        }
+        responses={201: openapi.Response(description="Usuário registrado.")}
     )
-
-
     def post(self, request):
-        data = request.data
-        serializer = RegisterSerializer(data=data)
-
+        serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response({
-                "data": {
-                    "success": False,
-                    "message": "Erro na validação dos dados.",
-                    "errors": serializer.errors
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        if not serializer.validated_data.get('is_professor'):
-            return Response({
-                "data": {
-                    "success": False,
-                    "message": "Somente professores podem se cadastrar.",
-                    "errors": {"is_professor": ["Permissão negada para este tipo de usuário."]}
-                }
-            }, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"data": {"success": False, "errors": serializer.errors}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         user = serializer.save()
         refresh = RefreshToken.for_user(user)
 
-        return Response({
+        access = str(refresh.access_token)
+        refresh_str = str(refresh)
+
+        resp = Response({
             "data": {
                 "success": True,
                 "message": "Usuário registrado com sucesso.",
+                "user": {
+                    "name": user.name,
+                    "email": user.email
+                },
                 "tokens": {
-                    "access_token": str(refresh.access_token),
-                    "refresh_token": str(refresh)
+                    "access_token": access  
                 }
             }
         }, status=status.HTTP_201_CREATED)
+
+        # grava o refresh como cookie HttpOnly
+        set_refresh_cookie(resp, refresh_str)
+        return resp
 
 
 class LoginView(APIView):
     @swagger_auto_schema(
         operation_description="Autentica um usuário e retorna um token JWT.",
         request_body=LoginSerializer,
-        responses={
-            200: openapi.Response(description="Login realizado com sucesso."),
-            400: "Dados inválidos.",
-            401: "Credenciais inválidas."
-        }
+        responses={200: openapi.Response(description="Login realizado com sucesso.")}
     )
-
-
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
 
         if not serializer.is_valid():
             return Response({
-                "data": {
-                    "success": False,
-                    "message": "Erro na validação dos dados.",
-                    "errors": serializer.errors
-                }
+                "data": {"success": False, "errors": serializer.errors}
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        email = serializer.validated_data['email']
-        password = serializer.validated_data['password']
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
 
         try:
             user = PollUser.objects.get(email=email)
         except PollUser.DoesNotExist:
             return Response({
-                "data": {
-                    "success": False,
-                    "message": "Credenciais inválidas.",
-                    "errors": {"email": ["Usuário não encontrado."]}
-                }
+                "data": {"success": False, "errors": {"email": ["Usuário não encontrado."]}}
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         if not check_password(password, user.password):
             return Response({
-                "data": {
-                    "success": False,
-                    "message": "Credenciais inválidas.",
-                    "errors": {"password": ["Senha incorreta."]}
-                }
+                "data": {"success": False, "errors": {"password": ["Senha incorreta."]}}
             }, status=status.HTTP_401_UNAUTHORIZED)
 
+        # Gera tokens
         refresh = RefreshToken.for_user(user)
-        return Response({
+        access = str(refresh.access_token)
+        refresh_str = str(refresh)
+
+        resp = Response({
             "data": {
                 "success": True,
                 "message": "Login realizado com sucesso.",
+                "user": {
+                    "name": user.name,
+                    "email": user.email
+                },
                 "tokens": {
-                    "access_token": str(refresh.access_token),
-                    "refresh_token": str(refresh)
+                    "access_token": access
                 }
             }
         }, status=status.HTTP_200_OK)
+
+        # Seta o refresh em cookie HttpOnly
+        set_refresh_cookie(resp, refresh_str)
+        return resp
+
+
+
+class LogoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Faz logout e apaga o cookie de refresh.",
+        responses={200: openapi.Response(description="Logout realizado.")}
+    )
+    def post(self, request):
+        resp = Response({
+            "data": {
+                "success": True,
+                "message": "Logout realizado. Cookies limpos."
+            }
+        }, status=status.HTTP_200_OK)
+        resp.delete_cookie(
+            key=REFRESH_COOKIE_NAME,
+            path=REFRESH_COOKIE_PATH,
+            samesite=COOKIE_SAMESITE,
+        )
+        return resp
 
 
 class SendPollView(APIView):

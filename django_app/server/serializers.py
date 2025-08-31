@@ -4,10 +4,11 @@ from django.contrib.auth.password_validation import validate_password
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+
     class Meta:
         model = PollUser
-        fields = ['email', 'password', 'register', 'telegram_id', 'is_professor']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ['email', 'password', 'name']
 
     def validate_password(self, value):
         validate_password(value)
