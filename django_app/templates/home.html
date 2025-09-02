@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Bem-vindo · Educational Bot{% endblock %}
+
+{% block content %}
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold">Bem-vindo ao Servidor <span class="text-slate-300">Educational Bot</span></h1>
+    <p class="mt-2 text-slate-300">
+       Use os links abaixo para explorar.
+    </p>
+  </header>
+
+  <section class="grid gap-4">
+    <a href="swagger/" class="block p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 shadow">
+      <h2 class="text-xl font-semibold">Swagger UI</h2>
+      <p class="text-slate-400">Explore e teste os endpoints no navegador.</p>
+    </a>
+
+    <a href="redoc/" class="block p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 shadow">
+      <h2 class="text-xl font-semibold">Redoc</h2>
+      <p class="text-slate-400">Documentação detalhada e navegável (OpenAPI).</p>
+    </a>
+
+
+  <footer class="mt-10 text-sm text-slate-400">
+    <p>© {{ now|date:"Y" }} Educational Bot</p>
+  </footer>
+{% endblock %}

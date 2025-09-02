@@ -5,6 +5,7 @@ import requests
 
 from django.contrib.auth.hashers import check_password
 from django.utils.timezone import make_aware
+from django.shortcuts import render
 
 from rest_framework import status, permissions
 from rest_framework.permissions import AllowAny
@@ -48,6 +49,11 @@ def set_refresh_cookie(response: Response, refresh_str: str):
         samesite=COOKIE_SAMESITE,
         path=REFRESH_COOKIE_PATH,  # cookie só é enviado nessa rota
     )
+
+# View para custom 404 page
+# Dá para melhorar depois
+def custom_404(request, exception):
+    return render(request, "404.html", status=404)
 
 class CookieTokenRefreshView(APIView):
     permission_classes = [AllowAny]
