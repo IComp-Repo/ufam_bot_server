@@ -4,7 +4,7 @@ from .views import RegisterView,LoginView, SendPollView, SendQuizView, TelegramW
 urlpatterns = [
     # Authentication
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("aut/login/", LoginView.as_view(), name="login"),
+    path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("auth/token/refresh/", CookieTokenRefreshView.as_view(), name="token-refresh"),
     # Poll and Quiz
