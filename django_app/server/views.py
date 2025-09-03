@@ -16,10 +16,15 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
-from .models import PollUser, Group, PollUserGroup
+from .models import (
+    PollUser,
+    Group,
+    PollUserGroup,
+    TelegramLinkToken
+)
 from .serializers import (
     BindGroupSerializer,
-    GroupSerializer,
+    UserGroupListItemSerializer,
     LoginSerializer,
     RegisterSerializer,
     SendPollSerializer,
@@ -30,9 +35,14 @@ from .tasks import send_quiz_task
 
 from project.settings.base import TELEGRAM_API
 
+# Bot username, usado para emissao do link
+BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "PollsICompBot")
+BOT_USER_ID = os.getenv("TELEGRAM_BOT_ID") 
+BACKEND_API_BASE = os.getenv("BACKEND_API_BASE", "https://web-production-9089.up.railway.app")  
+BIND_GROUP_URL = f"{BACKEND_API_BASE.rstrip('/')}/api/bind-group/" 
 
-
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"   # em produção: true (HTTPS)
+# Configurações de cookie para refresh token
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"   
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")                  # Sempre none pois nosso front e back estão em domínios diferentes
 REFRESH_COOKIE_PATH = os.getenv("REFRESH_COOKIE_PATH", "/api/auth/token/refresh/")
 REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
@@ -54,6 +64,32 @@ def set_refresh_cookie(response: Response, refresh_str: str):
 # Dá para melhorar depois
 def custom_404(request, exception):
     return render(request, "404.html", status=404)
+
+
+def safe_send_message(chat_id, text, reply_markup=None):
+    """Envia mensagem ao Telegram sem quebrar o webhook em caso de erro."""
+    try:
+        payload = {"chat_id": chat_id, "text": text}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        requests.post(f"{TELEGRAM_API}/sendMessage", json=payload, timeout=10)
+    except Exception:
+        pass
+
+
+def is_event_for_our_bot(new_chat_member: dict) -> bool:
+    """Confirma que o update my_chat_member é sobre o NOSSO bot."""
+    u = (new_chat_member or {}).get("user") or {}
+    if not u.get("is_bot"):
+        return False
+    if BOT_USER_ID:
+        try:
+            return str(u.get("id")) == str(int(BOT_USER_ID))
+        except Exception:
+            pass
+    bot_username = (u.get("username") or "").lower().lstrip("@")
+    return bot_username == BOT_USERNAME.lower().lstrip("@")
+
 
 class CookieTokenRefreshView(APIView):
     permission_classes = [AllowAny]
@@ -96,6 +132,29 @@ class CookieTokenRefreshView(APIView):
                     "errors": {"refresh": ["Token inválido/expirado."]}
                 }
             }, status=status.HTTP_401_UNAUTHORIZED)
+        
+
+class TelegramLinkView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(operation_description="Gera deep-link /start <token> para vincular o Telegram.")
+    def post(self, request):
+        if not BOT_USERNAME:
+            return Response({
+                "data": {"success": False, "message": "BOT_USERNAME não configurado no servidor."}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        token_obj = TelegramLinkToken.issue(request.user, ttl_minutes=15)
+        deep_link = f"https://t.me/{BOT_USERNAME}?start={token_obj.token}"
+        return Response({
+            "data": {
+                "success": True,
+                "message": "Deep-link gerado.",
+                "deep_link": deep_link,
+                "expires_at": token_obj.expires_at
+            }
+        }, status=status.HTTP_200_OK)
+
 
 
 class TelegramWebhookView(APIView):
@@ -104,69 +163,147 @@ class TelegramWebhookView(APIView):
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'message': openapi.Schema(
+                "message": openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
-                        'text': openapi.Schema(type=openapi.TYPE_STRING),
-                        'chat': openapi.Schema(type=openapi.TYPE_OBJECT)
-                    }
-                )
-            }
+                        "text": openapi.Schema(type=openapi.TYPE_STRING),
+                        "chat": openapi.Schema(type=openapi.TYPE_OBJECT),
+                    },
+                ),
+                "my_chat_member": openapi.Schema(type=openapi.TYPE_OBJECT),
+            },
         ),
-        responses={200: openapi.Response(description="Atualização recebida com sucesso.")}
+        responses={200: openapi.Response(description="Atualização recebida com sucesso.")},
     )
-
-
     def post(self, request):
-        update = request.data
-        message = update.get("message", {})
-        text = message.get("text", "")
-        chat = message.get("chat", {})
+        update = request.data or {}
+        message = update.get("message", {}) or {}
+        text = (message.get("text") or "").strip()
+        chat = message.get("chat", {}) or {}
         chat_id = chat.get("id")
-        sender = message.get("from", {})
-        sender_id = sender.get('id')
+        sender = message.get("from", {}) or {}
+        sender_id = sender.get("id")
 
-        if text == "/start":
-            requests.post(f"{TELEGRAM_API}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
-                "reply_markup": {
+        if text.startswith("/start"):
+            parts = text.split(maxsplit=1)
+            # /start <token> -> vincula telegram_id ao usuário dono do token (se o model existir)
+            if len(parts) == 2 and TelegramLinkToken:
+                token = parts[1]
+                try:
+                    t = TelegramLinkToken.objects.select_related("user").get(token=token)
+                    if not t.is_valid:
+                        safe_send_message(chat_id, "Este link expirou. Gere outro no app.")
+                        return Response({"data": {"status": "expired_token"}}, status=status.HTTP_200_OK)
+
+                    user = t.user
+                    user.telegram_id = sender_id
+                    user.save(update_fields=["telegram_id"])
+                    t.mark_used()
+
+                    safe_send_message(
+                        chat_id,
+                        "✅ Conta vinculada! Agora adicione o bot a um grupo para vincular automaticamente "
+                        "ou envie o comando /bind no grupo."
+                    )
+                    return Response({"data": {"status": "linked"}}, status=status.HTTP_200_OK)
+                except TelegramLinkToken.DoesNotExist:
+                    safe_send_message(chat_id, "Link inválido ou expirado. Gere outro no app.")
+                    return Response({"data": {"status": "invalid_token"}}, status=status.HTTP_200_OK)
+
+            # /start sem token → mensagem de boas-vindas com botão webapp
+            safe_send_message(
+                chat_id,
+                "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
+                reply_markup={
                     "inline_keyboard": [
-                        [
-                            {
-                                "text": "Criar enquete",
-                                "web_app": {"url": "https://poll-miniapp.vercel.app/"}
-                            }
-                        ]
+                        [{"text": "Criar enquete", "web_app": {"url": "https://poll-miniapp.vercel.app/"}}]
                     ]
-                }
-            })
+                },
+            )
+            return Response({"data": {"status": "start"}}, status=status.HTTP_200_OK)
+
+        #Auto-bind via my_chat_member =========
+        if "my_chat_member" in update:
+            mcm = update.get("my_chat_member") or {}
+
+            mch_chat = mcm.get("chat") or {}
+            group_chat_id = mch_chat.get("id")
+            chat_title = mch_chat.get("title") or ""
+
+            actor = mcm.get("from") or {}          
+            inviter_tg_id = actor.get("id")
+
+            new_member = mcm.get("new_chat_member") or {}
+            new_status = new_member.get("status")
+
+            if new_status in ("member", "administrator") and is_event_for_our_bot(new_member):
+                # precisa que o "actor" já tenha feito /start <token>
+                try:
+                    inviter = PollUser.objects.get(telegram_id=inviter_tg_id)
+                except PollUser.DoesNotExist:
+                    safe_send_message(
+                        group_chat_id,
+                        "⚠️ Quem adicionou o bot ainda não conectou a conta.\n"
+                        "No privado do bot, gere o link no app e use /start <token>.\n"
+                        "Depois, remova e adicione o bot novamente ou envie /bind no grupo."
+                    )
+                    return Response({"data": {"status": "inviter_not_linked"}}, status=status.HTTP_200_OK)
+
+                group, _ = Group.objects.get_or_create(
+                    chat_id=str(group_chat_id),
+                    defaults={"title": chat_title},
+                )
+                if chat_title and group.title != chat_title:
+                    group.title = chat_title
+                    group.save(update_fields=["title"])
+
+                PollUserGroup.objects.get_or_create(
+                    poll_user=inviter,
+                    group=group,
+                )
+
+                safe_send_message(group_chat_id, "✅ Bot conectado e grupo vinculado com sucesso.")
+                return Response({"data": {"status": "auto_bound"}}, status=status.HTTP_200_OK)
+
+            if is_event_for_our_bot(new_member) and new_status in ("kicked", "left"):
+                return Response({"data": {"status": "bot_removed"}}, status=status.HTTP_200_OK)
+
+            return Response({"data": {"status": "ignored"}}, status=status.HTTP_200_OK)
 
         if text == "/bind":
-            if (chat_type := chat.get('type')) and chat_type != 'group':
-                return Response({"status": 'bad request'})
+            chat_type = chat.get("type")
+            if chat_type not in ("group", "supergroup"):
+                return Response({"data": {"status": "bad_request"}}, status=status.HTTP_200_OK)
 
-            chat_title = chat.get("title")
+            chat_title = chat.get("title") or ""
+            try:
+                inviter = PollUser.objects.get(telegram_id=sender_id)
+            except PollUser.DoesNotExist:
+                safe_send_message(
+                    chat_id,
+                    "⚠️ Você ainda não conectou sua conta.\n"
+                    "No privado do bot, gere o link no app e use /start <token>."
+                )
+                return Response({"data": {"status": "user_not_linked"}}, status=status.HTTP_200_OK)
 
-            bind_response = requests.post(f'https://bot-telegram-test-server1.onrender.com/api/bind-group/', json={
-                'telegram_id': sender_id,
-                'chat_id': chat_id,
-                'chat_title': chat_title
-            })
+            group, _ = Group.objects.get_or_create(
+                chat_id=str(chat_id),
+                defaults={"title": chat_title},
+            )
+            if chat_title and group.title != chat_title:
+                group.title = chat_title
+                group.save(update_fields=["title"])
 
-            if not bind_response.ok:
-                requests.post(f"{TELEGRAM_API}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": f"Erro! Não foi possível salvar o grupo {chat_title}.",
-                })
-                return Response({"data": {"status":bind_response.status_code}})
-            
-            requests.post(f"{TELEGRAM_API}/sendMessage", json={
-                "chat_id": chat_id,
-                "text": f"Sucesso! O grupo {chat_title} foi salvo.",
-            })
+            PollUserGroup.objects.get_or_create(
+                poll_user=inviter,
+                group=group,
+            )
 
-        return Response({"data": {"status": "ok"}})
+            safe_send_message(chat_id, f"✅ Sucesso! O grupo {chat_title or chat_id} foi salvo.")
+            return Response({"data": {"status": "bound"}}, status=status.HTTP_200_OK)
+
+        return Response({"data": {"status": "ok"}}, status=status.HTTP_200_OK)
+
 
 
 class RegisterView(APIView):
@@ -472,9 +609,10 @@ class UserGroupsView(APIView):
         operation_description="Lista todos os grupos vinculados ao usuário autenticado.",
         responses={200: openapi.Response(description="Lista de grupos vinculados.")}
     )
-
     def get(self, request):
-        user = request.user
-        groups = PollUser.objects.list_groups(user)
-        serializer = GroupSerializer(groups, many=True)
-        return Response(serializer.data)
+        qs = (PollUserGroup.objects
+              .filter(poll_user=request.user)
+              .select_related('group')
+              .order_by('-bind_date'))
+        data = UserGroupListItemSerializer(qs, many=True).data
+        return Response({"data": {"success": True, "groups": data}}, status=status.HTTP_200_OK)
