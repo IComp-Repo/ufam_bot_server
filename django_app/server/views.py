@@ -91,6 +91,7 @@ def is_event_for_our_bot(new_chat_member: dict) -> bool:
     return bot_username == BOT_USERNAME.lower().lstrip("@")
 
 
+# ========== Views ==========
 class CookieTokenRefreshView(APIView):
     permission_classes = [AllowAny]
 
@@ -154,7 +155,6 @@ class TelegramLinkView(APIView):
                 "expires_at": token_obj.expires_at
             }
         }, status=status.HTTP_200_OK)
-
 
 
 class TelegramWebhookView(APIView):
@@ -222,7 +222,7 @@ class TelegramWebhookView(APIView):
             )
             return Response({"data": {"status": "start"}}, status=status.HTTP_200_OK)
 
-        #Auto-bind via my_chat_member =========
+        #Auto-bind via my_chat_member 
         if "my_chat_member" in update:
             mcm = update.get("my_chat_member") or {}
 
@@ -303,7 +303,6 @@ class TelegramWebhookView(APIView):
             return Response({"data": {"status": "bound"}}, status=status.HTTP_200_OK)
 
         return Response({"data": {"status": "ok"}}, status=status.HTTP_200_OK)
-
 
 
 class RegisterView(APIView):
@@ -398,7 +397,6 @@ class LoginView(APIView):
         return resp
 
 
-
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -433,8 +431,6 @@ class SendPollView(APIView):
             500: "Erro ao enviar a Poll."
         }
     )
-
-    
     def post(self, request):
         serializer = SendPollSerializer(data=request.data)
 

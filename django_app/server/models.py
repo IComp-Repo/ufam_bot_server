@@ -1,5 +1,4 @@
 import secrets
-
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import( 
@@ -7,6 +6,8 @@ from django.contrib.auth.models import(
     BaseUserManager,
     PermissionsMixin
 )
+
+
 class PollUserManager(BaseUserManager):
     def create_user(self, email, telegram_id=None, password=None, **extra_fields):
         if not email:
@@ -48,10 +49,12 @@ class PollUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.name or self.email
 
+
 class Group(models.Model):
     chat_id = models.CharField(unique=True)
     fetch_date = models.DateTimeField(auto_now_add=True)
     title = models.CharField(max_length=255)
+
 
 class PollUserGroup(models.Model):
     poll_user = models.ForeignKey(PollUser, on_delete=models.CASCADE)

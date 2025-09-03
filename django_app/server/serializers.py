@@ -1,6 +1,10 @@
 from rest_framework import serializers
-from .models import PollUser, Group, PollUserGroup
 from django.contrib.auth.password_validation import validate_password
+from .models import (
+    PollUser,
+    Group,
+    PollUserGroup
+)
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -59,7 +63,6 @@ class GroupSerializer(serializers.ModelSerializer):
 class UserGroupListItemSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source='group.id', read_only=True)
     title = serializers.CharField(source='group.title', read_only=True)
-    # Se migrou para BigIntegerField, mantenha IntegerField; se continua CharField, troque aqui.
     chat_id = serializers.IntegerField(source='group.chat_id', read_only=True)
     fetch_date = serializers.DateTimeField(source='group.fetch_date', read_only=True)
 
