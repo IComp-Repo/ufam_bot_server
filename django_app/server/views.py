@@ -68,7 +68,7 @@ def set_refresh_cookie(response: Response, refresh_str: str):
 
 # View para custom 404 page
 # Dá para melhorar depois
-def custom_404(request):
+def custom_404(request, exception):
     return render(request, "404.html", status=404)
 
 
