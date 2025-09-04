@@ -5,7 +5,10 @@ import requests
 
 from django.contrib.auth.hashers import check_password
 from django.utils.timezone import make_aware
+from datetime import datetime
 from django.shortcuts import render
+from django.db.models import Count, Q
+from django.db.models.functions import TruncDate
 
 from rest_framework import status, permissions
 from rest_framework.permissions import AllowAny
@@ -20,8 +23,14 @@ from .models import (
     PollUser,
     Group,
     PollUserGroup,
-    TelegramLinkToken
+    TelegramLinkToken,
+    Quiz,
+    QuizQuestion,
+    QuizOption,
+    QuizMessage,
+    QuizAnswer
 )
+
 from .serializers import (
     BindGroupSerializer,
     UserGroupListItemSerializer,
@@ -177,6 +186,7 @@ class TelegramWebhookView(APIView):
     )
     def post(self, request):
         update = request.data or {}
+        print(request.data)
         message = update.get("message", {}) or {}
         text = (message.get("text") or "").strip()
         chat = message.get("chat", {}) or {}
@@ -202,8 +212,9 @@ class TelegramWebhookView(APIView):
 
                     safe_send_message(
                         chat_id,
-                        "✅ Conta vinculada! Agora adicione o bot a um grupo para vincular automaticamente "
-                        "ou envie o comando /bind no grupo."
+                        "✅ Conta vinculada com sucesso ao *Knowledge Check Bot*!\n\n"
+                        "👉 Agora, adicione o bot a um grupo que você administra\n"
+                        "ou envie o comando /bind diretamente no grupo."
                     )
                     return Response({"data": {"status": "linked"}}, status=status.HTTP_200_OK)
                 except TelegramLinkToken.DoesNotExist:
@@ -243,7 +254,7 @@ class TelegramWebhookView(APIView):
                 except PollUser.DoesNotExist:
                     safe_send_message(
                         group_chat_id,
-                        "⚠️ Quem adicionou o bot ainda não conectou a conta.\n"
+                        "Quem adicionou o bot ainda não conectou a conta.\n"
                         "No privado do bot, gere o link no app e use /start <token>.\n"
                         "Depois, remova e adicione o bot novamente ou envie /bind no grupo."
                     )
@@ -262,13 +273,56 @@ class TelegramWebhookView(APIView):
                     group=group,
                 )
 
-                safe_send_message(group_chat_id, "✅ Bot conectado e grupo vinculado com sucesso.")
+                safe_send_message(
+                    group_chat_id,
+                    "✅ Bot conectado e grupo vinculado à sua conta do *Knowledge Check Bot* com sucesso! 🎉"
+                )
+
                 return Response({"data": {"status": "auto_bound"}}, status=status.HTTP_200_OK)
 
             if is_event_for_our_bot(new_member) and new_status in ("kicked", "left"):
                 return Response({"data": {"status": "bot_removed"}}, status=status.HTTP_200_OK)
 
             return Response({"data": {"status": "ignored"}}, status=status.HTTP_200_OK)
+        
+        if "poll_answer" in update:
+            pa = update["poll_answer"]
+            tg_poll_id = pa.get("poll_id")
+            user = pa.get("user") or {}
+            tg_user_id = user.get("id")
+            option_ids = pa.get("option_ids") or []
+
+            print("[poll_answer] pid=", repr(tg_poll_id), "uid=", tg_user_id, "opts=", option_ids)
+
+            if not tg_poll_id or not option_ids or tg_user_id is None:
+                return Response({"data": {"status": "skip"}}, status=200)
+
+            try:
+                question = QuizQuestion.objects.filter(telegram_poll_id=str(tg_poll_id)).first()
+                print("[poll_answer] qq_found=", bool(question), "qq_id=", getattr(question, "id", None))
+
+                if not question:
+                    return Response({"data": {"status": "question_not_found"}}, status=200)
+
+                chosen = int(option_ids[0])
+                is_correct = (chosen == int(question.correct_option_index))
+
+                obj, created = QuizAnswer.objects.update_or_create(
+                    question=question,
+                    telegram_user_id=int(tg_user_id),
+                    defaults={
+                        "chosen_option_index": chosen,
+                        "is_correct": is_correct,
+                        "answered_at": make_aware(datetime.now()), 
+                    },
+                )
+                print("[poll_answer] saved:", {"id": obj.id, "created": created, "is_correct": obj.is_correct})
+                return Response({"data": {"status": "answer_recorded", "correct": is_correct}}, status=200)
+
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                return Response({"data": {"status": "exception", "detail": str(e)}}, status=200)
+        
 
         if text == "/bind":
             chat_type = chat.get("type")
@@ -281,8 +335,9 @@ class TelegramWebhookView(APIView):
             except PollUser.DoesNotExist:
                 safe_send_message(
                     chat_id,
-                    "⚠️ Você ainda não conectou sua conta.\n"
-                    "No privado do bot, gere o link no app e use /start <token>."
+                    "⚠️ Você ainda não conectou sua conta.\n\n"
+                    "👉 No chat privado com o bot, gere seu link no app e depois use:\n"
+                    "/start <token>"
                 )
                 return Response({"data": {"status": "user_not_linked"}}, status=status.HTTP_200_OK)
 
@@ -299,7 +354,10 @@ class TelegramWebhookView(APIView):
                 group=group,
             )
 
-            safe_send_message(chat_id, f"✅ Sucesso! O grupo {chat_title or chat_id} foi salvo.")
+            safe_send_message(
+            chat_id,
+            f"✅ Sucesso! O grupo *{chat_title or chat_id}* foi vinculado à sua conta no *Knowledge Check Bot* 🎉"
+            )
             return Response({"data": {"status": "bound"}}, status=status.HTTP_200_OK)
 
         return Response({"data": {"status": "ok"}}, status=status.HTTP_200_OK)
@@ -505,42 +563,130 @@ class SendQuizView(APIView):
             return Response({
                 "data": {
                     "success": False,
-                    "message": "Erro de validação nos dados enviados.",
+                    "message": "Erro na validação dos dados.",
                     "errors": serializer.errors
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
         chat_id = serializer.validated_data['chatId']
+        # formato esperado: [{"question": str, "options": [str, ...], "correct_option_id": int}, ...]
         questions = serializer.validated_data['questions']
         schedule_date = serializer.validated_data.get('schedule_date')
         schedule_time = serializer.validated_data.get('schedule_time')
 
+        # 1) cria o pacote do quiz
+        quiz = Quiz.objects.create(
+            creator=request.user,
+            title=f"Quiz de {request.user.name or request.user.email}"
+        )
+
+        # 2) Se agendado → enfileira a task com a NOVA assinatura
         if schedule_date and schedule_time:
             try:
-                scheduled_datetime = make_aware(datetime.combine(schedule_date, schedule_time))
-                send_quiz_task.apply_async((chat_id, questions), eta=scheduled_datetime)
+                eta_dt = make_aware(datetime.combine(schedule_date, schedule_time))
+                # >>> task agora recebe (quiz_id, chat_id, questions)
+                send_quiz_task.apply_async((quiz.id, chat_id, questions), eta=eta_dt)
+
                 return Response({
                     "data": {
                         "success": True,
-                        "message": f"Quizzes agendados para {scheduled_datetime.strftime('%d/%m/%Y %H:%M')}."
+                        "message": f"Quiz agendado para {eta_dt.strftime('%d/%m/%Y %H:%M')}.",
+                        "quiz": {"id": quiz.id, "title": quiz.title}
                     }
                 }, status=status.HTTP_200_OK)
             except Exception as e:
                 return Response({
                     "data": {
                         "success": False,
-                        "message": "Erro ao agendar envio dos quizzes.",
+                        "message": "Erro ao agendar envio do quiz.",
                         "errors": str(e)
                     }
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            send_quiz_task.delay(chat_id, questions)
+
+        # 3) Envio imediato: envia cada pergunta agora e grava tudo
+        created_questions = []
+        failed = []
+
+        for idx, q in enumerate(questions):
+            text = q["question"]
+            options = q["options"]
+            # aceita tanto correct_option_id quanto correctOption (compat)
+            correct_idx = q.get("correct_option_id", q.get("correctOption"))
+
+            try:
+                tg_resp = requests.post(f"{TELEGRAM_API}/sendPoll", json={
+                    "chat_id": chat_id,
+                    "question": text,
+                    "options": options,
+                    "type": "quiz",
+                    "correct_option_id": correct_idx,
+                    "is_anonymous": False,
+                }, timeout=20)
+
+                if tg_resp.status_code != 200:
+                    failed.append({
+                        "index": idx,
+                        "question": text,
+                        "status": "error",
+                        "error": tg_resp.text,
+                    })
+                    continue
+
+                result = tg_resp.json().get("result", {})
+                message_id = result.get("message_id")
+                poll_obj = result.get("poll") or {}
+                telegram_poll_id = poll_obj.get("id")  # se não vier, webhook 'poll' fará o backfill
+
+                # cria QuizQuestion
+                qq = QuizQuestion.objects.create(
+                    quiz=quiz,
+                    text=text,
+                    correct_option_index=correct_idx,
+                    telegram_poll_id=telegram_poll_id
+                )
+
+                # cria opções
+                for o_idx, opt in enumerate(options):
+                    QuizOption.objects.create(question=qq, option_index=o_idx, text=opt)
+
+                # registra mensagem
+                if message_id is not None:
+                    QuizMessage.objects.create(
+                        question=qq,
+                        chat_id=str(chat_id),   # seu Group.chat_id é CharField
+                        message_id=message_id
+                    )
+
+                created_questions.append(qq.id)
+
+            except requests.RequestException as e:
+                failed.append({
+                    "index": idx,
+                    "question": text,
+                    "status": "error",
+                    "error": str(e),
+                })
+
+        if not created_questions and failed:
             return Response({
                 "data": {
-                    "success": True,
-                    "message": "Quizzes enviados imediatamente."
+                    "success": False,
+                    "message": "Falha ao enviar todas as perguntas do quiz.",
+                    "errors": failed
                 }
-            }, status=status.HTTP_200_OK)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "data": {
+                "success": True,
+                "message": f"{len(created_questions)} perguntas enviadas."
+                           + (f" {len(failed)} falharam." if failed else ""),
+                "quiz": {"id": quiz.id, "title": quiz.title},
+                "question_ids": created_questions,
+                "failed": failed
+            }
+        }, status=status.HTTP_200_OK)
+
 
 
 class BindGroupView(APIView):
@@ -612,3 +758,122 @@ class UserGroupsView(APIView):
               .order_by('-bind_date'))
         data = UserGroupListItemSerializer(qs, many=True).data
         return Response({"data": {"success": True, "groups": data}}, status=status.HTTP_200_OK)
+    
+
+class QuizDashboardSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        my_quizzes = Quiz.objects.filter(creator=request.user)
+        total_quizzes = my_quizzes.count()
+        total_questions = QuizQuestion.objects.filter(quiz__in=my_quizzes).count()
+        total_answers = QuizAnswer.objects.filter(question__quiz__in=my_quizzes).count()
+        participants = (QuizAnswer.objects
+                        .filter(question__quiz__in=my_quizzes)
+                        .values("telegram_user_id").distinct().count())
+        accuracy = 0.0
+        correct = QuizAnswer.objects.filter(question__quiz__in=my_quizzes, is_correct=True).count()
+        if total_answers:
+            accuracy = round(100.0 * correct / total_answers, 2)
+        return Response({
+            "data": {
+                "total_quizzes": total_quizzes,
+                "total_questions": total_questions,
+                "total_answers": total_answers,
+                "participants": participants,
+                "accuracy": accuracy
+            }
+        }, status=200)
+    
+
+class QuizDashboardSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        my_quizzes = Quiz.objects.filter(creator=request.user)
+        total_quizzes = my_quizzes.count()
+        total_questions = QuizQuestion.objects.filter(quiz__in=my_quizzes).count()
+        total_answers = QuizAnswer.objects.filter(question__quiz__in=my_quizzes).count()
+        participants = (QuizAnswer.objects
+                        .filter(question__quiz__in=my_quizzes)
+                        .values("telegram_user_id").distinct().count())
+        accuracy = 0.0
+        correct = QuizAnswer.objects.filter(question__quiz__in=my_quizzes, is_correct=True).count()
+        if total_answers:
+            accuracy = round(100.0 * correct / total_answers, 2)
+        return Response({
+            "data": {
+                "total_quizzes": total_quizzes,
+                "total_questions": total_questions,
+                "total_answers": total_answers,
+                "participants": participants,
+                "accuracy": accuracy
+            }
+        }, status=200)
+    
+    
+class QuizResponsesPerDayView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        qs = (QuizAnswer.objects
+              .filter(question__quiz__creator=request.user)
+              .annotate(day=TruncDate("answered_at"))
+              .values("day")
+              .annotate(responses=Count("id"))
+              .order_by("day"))
+        return Response({"data": list(qs)}, status=200)
+    
+
+class QuizLastActivitiesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        limit = int(request.query_params.get("limit", 10))
+        rows = (QuizQuestion.objects
+                .filter(quiz__creator=request.user)
+                .annotate(total_answers=Count("answers"))
+                .order_by("-created_at")[:limit])
+        data = [{
+            "question_id": q.id,
+            "question": q.text,
+            "created_at": q.created_at,
+            "answers": q.total_answers,
+        } for q in rows]
+        return Response({"data": data}, status=200)
+
+
+class QuizQuestionStatsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request, question_id: int):
+        try:
+            q = QuizQuestion.objects.select_related("quiz__creator").get(id=question_id, quiz__creator=request.user)
+        except QuizQuestion.DoesNotExist:
+            return Response({"message": "Not found"}, status=404)
+
+        total = q.answers.count()
+        correct = q.answers.filter(is_correct=True).count()
+        accuracy = round(100.0 * correct / total, 2) if total else 0.0
+
+        # distribuição por opção
+        by_opt = (QuizAnswer.objects
+                  .filter(question=q)
+                  .values("chosen_option_index")
+                  .annotate(count=Count("id"))
+                  .order_by("chosen_option_index"))
+        options = []
+        opt_map = {o.option_index: o.text for o in q.options.all()}
+        for row in by_opt:
+            idx = row["chosen_option_index"]
+            options.append({
+                "option_index": idx,
+                "text": opt_map.get(idx, f"Opção {idx}"),
+                "count": row["count"],
+                "is_correct": (idx == q.correct_option_index),
+            })
+
+        return Response({
+            "data": {
+                "question_id": q.id,
+                "text": q.text,
+                "total_answers": total,
+                "accuracy": accuracy,
+                "options": options,
+            }
+        }, status=200)

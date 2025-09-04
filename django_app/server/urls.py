@@ -9,7 +9,11 @@ from .views import (
     BindGroupView, 
     UserGroupsView, 
     CookieTokenRefreshView, 
-    LogoutView
+    LogoutView,
+    QuizDashboardSummaryView,
+    QuizResponsesPerDayView,
+    QuizLastActivitiesView,
+    QuizQuestionStatsView,
 )
 urlpatterns = [
     # Authentication
@@ -26,5 +30,12 @@ urlpatterns = [
     # Group Management
     path("bind-group/", BindGroupView.as_view(), name="bind_group"),
     path("user-groups/", UserGroupsView.as_view(), name="user-groups"),
-
+    # Dashboard and Analytics
+    path("dashboard/quiz/summary/", QuizDashboardSummaryView.as_view()),
+    path("dashboard/quiz/responses-per-day/", QuizResponsesPerDayView.as_view()),
+    path("dashboard/quiz/last-activities/", QuizLastActivitiesView.as_view()),
+    path("dashboard/quiz/questions/<int:question_id>/stats/", QuizQuestionStatsView.as_view()),
 ]
+
+
+

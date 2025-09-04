@@ -1,6 +1,9 @@
 import secrets
+
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
+
 from django.contrib.auth.models import( 
     AbstractBaseUser,
     BaseUserManager,
@@ -95,3 +98,51 @@ class TelegramLinkToken(models.Model):
     @property
     def is_valid(self):
         return self.used_at is None and timezone.now() <= self.expires_at
+    
+
+class Quiz(models.Model):
+    """Um conjunto de perguntas (ou 1) enviado por um criador."""
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="quizzes")
+    title = models.CharField(max_length=255, blank=True, default="")  
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class QuizQuestion(models.Model):
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions")
+    text = models.CharField(max_length=512)
+    correct_option_index = models.IntegerField()
+    telegram_poll_id = models.CharField(max_length=128, unique=True, null=True, blank=True)  # id do poll (quiz) do Telegram
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class QuizOption(models.Model):
+    question = models.ForeignKey(QuizQuestion, on_delete=models.CASCADE, related_name="options")
+    option_index = models.IntegerField()  # posição enviada ao Telegram
+    text = models.CharField(max_length=255)
+
+    class Meta:
+        unique_together = (("question", "option_index"),)
+
+
+class QuizMessage(models.Model):
+    """Mensagem real (quiz) enviada em um chat."""
+    question = models.ForeignKey(QuizQuestion, on_delete=models.CASCADE, related_name="messages")
+    chat_id = models.CharField(max_length=64)  
+    message_id = models.BigIntegerField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("chat_id", "message_id"),)
+
+
+class QuizAnswer(models.Model):
+    """Resposta de um usuário a uma pergunta do quiz."""
+    question = models.ForeignKey(QuizQuestion, on_delete=models.CASCADE, related_name="answers")
+    telegram_user_id = models.BigIntegerField()
+    chosen_option_index = models.IntegerField()
+    is_correct = models.BooleanField(default=False)
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("question", "telegram_user_id"),)  # 1 resposta por usuário (última sobrescreve)
+        indexes = [models.Index(fields=["question", "telegram_user_id"])]
