@@ -42,20 +42,17 @@ from .serializers import (
 
 from .tasks import send_quiz_task
 
-from project.settings.base import TELEGRAM_API
+from project.settings.base import (
+    TELEGRAM_API,
+    BOT_USERNAME,
+    BOT_USER_ID,
+    COOKIE_SECURE,
+    COOKIE_SAMESITE,
+    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_PATH,
+    REFRESH_TTL_DAYS,
+)
 
-# Bot username, usado para emissao do link
-BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "PollsICompBot")
-BOT_USER_ID = os.getenv("TELEGRAM_BOT_ID") 
-BACKEND_API_BASE = os.getenv("BACKEND_API_BASE", "https://web-production-9089.up.railway.app")  
-BIND_GROUP_URL = f"{BACKEND_API_BASE.rstrip('/')}/api/bind-group/" 
-
-# Configurações de cookie para refresh token
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"   
-COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")                  # Sempre none pois nosso front e back estão em domínios diferentes
-REFRESH_COOKIE_PATH = os.getenv("REFRESH_COOKIE_PATH", "/api/auth/token/refresh/")
-REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
-REFRESH_TTL_DAYS = int(os.getenv("REFRESH_TTL_DAYS", "14"))
 
 
 def set_refresh_cookie(response: Response, refresh_str: str):
@@ -71,7 +68,7 @@ def set_refresh_cookie(response: Response, refresh_str: str):
 
 # View para custom 404 page
 # Dá para melhorar depois
-def custom_404(request, exception):
+def custom_404(request):
     return render(request, "404.html", status=404)
 
 

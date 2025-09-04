@@ -184,3 +184,16 @@ AUTH_USER_MODEL = 'server.PollUser'
 
 
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+# Bot username, usado para emissao do link
+BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "PollsICompBot")
+BOT_USER_ID = os.getenv("TELEGRAM_BOT_ID") 
+BACKEND_API_BASE = os.getenv("BACKEND_API_BASE", "https://web-production-9089.up.railway.app")  
+BIND_GROUP_URL = f"{BACKEND_API_BASE.rstrip('/')}/api/bind-group/" 
+
+# Configurações de cookie para refresh token
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"   
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")                  # Sempre none pois nosso front e back estão em domínios diferentes
+REFRESH_COOKIE_PATH = os.getenv("REFRESH_COOKIE_PATH", "/api/auth/token/refresh/")
+REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
+REFRESH_TTL_DAYS = int(os.getenv("REFRESH_TTL_DAYS", "14"))
