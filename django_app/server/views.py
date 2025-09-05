@@ -784,24 +784,36 @@ class QuizDashboardSummaryView(APIView):
 
 class QuizDashboardSummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
         my_quizzes = Quiz.objects.filter(creator=request.user)
         total_quizzes = my_quizzes.count()
         total_questions = QuizQuestion.objects.filter(quiz__in=my_quizzes).count()
-        total_answers = QuizAnswer.objects.filter(question__quiz__in=my_quizzes).count()
-        participants = (QuizAnswer.objects
-                        .filter(question__quiz__in=my_quizzes)
-                        .values("telegram_user_id").distinct().count())
-        accuracy = 0.0
-        correct = QuizAnswer.objects.filter(question__quiz__in=my_quizzes, is_correct=True).count()
-        if total_answers:
-            accuracy = round(100.0 * correct / total_answers, 2)
+
+        answers_qs = QuizAnswer.objects.filter(question__quiz__in=my_quizzes)
+
+        agg = answers_qs.aggregate(
+            total_answers=Count('id'),
+            correct_answers=Count('id', filter=Q(is_correct=True)),
+            incorrect_answers=Count('id', filter=Q(is_correct=False)),
+            participants=Count('telegram_user_id', distinct=True),
+        )
+
+        total_answers = agg['total_answers'] or 0
+        correct = agg['correct_answers'] or 0
+        incorrect = agg['incorrect_answers'] or 0
+        participants = agg['participants'] or 0
+
+        accuracy = round(100.0 * correct / total_answers, 2) if total_answers else 0.0
+
         return Response({
             "data": {
                 "total_quizzes": total_quizzes,
                 "total_questions": total_questions,
                 "total_answers": total_answers,
                 "participants": participants,
+                "correct_answers": correct,
+                "incorrect_answers": incorrect,
                 "accuracy": accuracy
             }
         }, status=200)
