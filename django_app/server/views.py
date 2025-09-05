@@ -5,7 +5,6 @@ import requests
 
 from django.contrib.auth.hashers import check_password
 from django.utils.timezone import make_aware
-from datetime import datetime
 from django.shortcuts import render
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
@@ -209,7 +208,7 @@ class TelegramWebhookView(APIView):
 
                     safe_send_message(
                         chat_id,
-                        "✅ Conta vinculada com sucesso ao *Knowledge Check Bot*!\n\n"
+                        "✅ Conta vinculada com sucesso ao Knowledge Check Bot!\n\n"
                         "👉 Agora, adicione o bot a um grupo que você administra\n"
                         "ou envie o comando /bind diretamente no grupo."
                     )
@@ -272,7 +271,7 @@ class TelegramWebhookView(APIView):
 
                 safe_send_message(
                     group_chat_id,
-                    "✅ Bot conectado e grupo vinculado à sua conta do *Knowledge Check Bot* com sucesso! 🎉"
+                    "✅ Bot conectado e grupo vinculado à sua conta do Knowledge Check Bot com sucesso! 🤖🎉"
                 )
 
                 return Response({"data": {"status": "auto_bound"}}, status=status.HTTP_200_OK)
@@ -353,7 +352,7 @@ class TelegramWebhookView(APIView):
 
             safe_send_message(
             chat_id,
-            f"✅ Sucesso! O grupo *{chat_title or chat_id}* foi vinculado à sua conta no *Knowledge Check Bot* 🎉"
+            f"✅ Sucesso! O grupo {chat_title or chat_id} foi vinculado à sua conta no Knowledge Check Bot! 🤖🎉"
             )
             return Response({"data": {"status": "bound"}}, status=status.HTTP_200_OK)
 
@@ -650,7 +649,7 @@ class SendQuizView(APIView):
                 if message_id is not None:
                     QuizMessage.objects.create(
                         question=qq,
-                        chat_id=str(chat_id),   # seu Group.chat_id é CharField
+                        chat_id=str(chat_id),   
                         message_id=message_id
                     )
 
