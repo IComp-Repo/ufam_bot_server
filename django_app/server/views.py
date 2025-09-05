@@ -833,18 +833,43 @@ class QuizResponsesPerDayView(APIView):
 
 class QuizLastActivitiesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
-        limit = int(request.query_params.get("limit", 10))
-        rows = (QuizQuestion.objects
-                .filter(quiz__creator=request.user)
-                .annotate(total_answers=Count("answers"))
-                .order_by("-created_at")[:limit])
-        data = [{
-            "question_id": q.id,
-            "question": q.text,
-            "created_at": q.created_at,
-            "answers": q.total_answers,
-        } for q in rows]
+        try:
+            limit = int(request.query_params.get("limit", 10))
+        except (TypeError, ValueError):
+            limit = 10
+
+        rows = (
+            QuizQuestion.objects
+            .filter(quiz__creator=request.user)
+            .annotate(
+                total_answers=Count("answers"),
+                correct_answers=Count("answers", filter=Q(answers__is_correct=True)),
+                incorrect_answers=Count("answers", filter=Q(answers__is_correct=False)),
+                participants=Count("answers__telegram_user_id", distinct=True),
+            )
+            .order_by("-created_at")[:limit]
+        )
+
+        data = []
+        for q in rows:
+            total = q.total_answers or 0
+            correct = q.correct_answers or 0
+            incorrect = q.incorrect_answers or 0
+            accuracy = round(100.0 * correct / total, 2) if total else 0.0
+
+            data.append({
+                "question_id": q.id,
+                "question": q.text,
+                "created_at": q.created_at,
+                "answers": total,
+                "correct_answers": correct,
+                "incorrect_answers": incorrect,
+                "accuracy": accuracy,
+                "participants": q.participants or 0,
+            })
+
         return Response({"data": data}, status=200)
 
 
