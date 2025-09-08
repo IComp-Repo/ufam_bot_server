@@ -187,14 +187,36 @@ class TelegramWebhookView(APIView):
         text = (message.get("text") or "").strip()
         chat = message.get("chat", {}) or {}
         chat_id = chat.get("id")
+        chat_type = (chat.get("type") or "").lower() 
         sender = message.get("from", {}) or {}
         sender_id = sender.get("id")
 
-        if text.startswith("/start"):
-            parts = text.split(maxsplit=1)
-            # /start <token> -> vincula telegram_id ao usuário dono do token (se o model existir)
-            if len(parts) == 2 and TelegramLinkToken:
-                token = parts[1]
+        # --- util: extrai comando e argumento, lidando com /start@SeuBot ---
+        def parse_command(s: str):
+            if not s.startswith("/"):
+                return None, None
+            head, *rest = s.split(maxsplit=1)
+            # remove @botusername do comando (em grupos costuma vir /start@MeuBot)
+            cmd = head.split("@", 1)[0].lower()  # "/start"
+            arg = rest[0] if rest else ""
+            return cmd, arg
+
+        cmd, arg = parse_command(text)
+
+
+        if cmd == "/start":
+            # se NÃO for chat privado, avisa para usar no privado e sai
+            if chat_type != "private":
+                safe_send_message(
+                    chat_id,
+                    "⚠️ Este comando deve ser usado no chat privado do bot.\n"
+                    "Abra o chat com o bot e envie: /start"
+                )
+                return Response({"data": {"status": "start_in_group_blocked"}}, status=status.HTTP_200_OK)
+
+            # /start <token> → vincula
+            if arg:
+                token = arg
                 try:
                     t = TelegramLinkToken.objects.select_related("user").get(token=token)
                     if not t.is_valid:
@@ -217,7 +239,7 @@ class TelegramWebhookView(APIView):
                     safe_send_message(chat_id, "Link inválido ou expirado. Gere outro no app.")
                     return Response({"data": {"status": "invalid_token"}}, status=status.HTTP_200_OK)
 
-            # /start sem token → mensagem de boas-vindas com botão webapp
+            # /start sem token → mensagem de boas-vindas COM botão (apenas no privado)
             safe_send_message(
                 chat_id,
                 "Vamos começar 🖥️\nUse o botão abaixo para criar uma enquete!",
