@@ -219,11 +219,33 @@ class TelegramWebhookView(APIView):
                 token = arg
                 try:
                     t = TelegramLinkToken.objects.select_related("user").get(token=token)
+                    
                     if not t.is_valid:
                         safe_send_message(chat_id, "Este link expirou. Gere outro no app.")
                         return Response({"data": {"status": "expired_token"}}, status=status.HTTP_200_OK)
-
+                    
                     user = t.user
+                    
+                    #verifica se o usuário já tem telegram_id diferente do sender_id
+                    if user.telegram_id and user.telegram_id != sender_id:
+                        safe_send_message(
+                            chat_id,
+                            "⚠️ Este Telegram já está vinculado a outra conta.\n"
+                            "Se acredita ser um erro, entre em contato com o suporte."
+                        )
+                        return Response({"data": {"status": "user_already_linked"}}, status=status.HTTP_200_OK)
+                    
+                    #verifica se o telegram_id já está em uso por outro usuário
+                    existing_user = PollUser.objects.filter(telegram_id=sender_id).exclude(id=user.id).first()
+                    if existing_user:
+                        safe_send_message(
+                            chat_id,
+                            "⚠️ Este Telegram já está vinculado a outra conta.\n"
+                            "Se acredita ser um erro, entre em contato com o suporte."
+                        )
+                        return Response({"data": {"status": "telegram_id_in_use"}}, status=status.HTTP_200_OK)
+                    
+                    #vincula e marca token como usado
                     user.telegram_id = sender_id
                     user.save(update_fields=["telegram_id"])
                     t.mark_used()
@@ -235,6 +257,7 @@ class TelegramWebhookView(APIView):
                         "ou envie o comando /bind diretamente no grupo."
                     )
                     return Response({"data": {"status": "linked"}}, status=status.HTTP_200_OK)
+               
                 except TelegramLinkToken.DoesNotExist:
                     safe_send_message(chat_id, "Link inválido ou expirado. Gere outro no app.")
                     return Response({"data": {"status": "invalid_token"}}, status=status.HTTP_200_OK)
