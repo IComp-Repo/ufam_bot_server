@@ -14,6 +14,7 @@ from .views import (
     QuizResponsesPerDayView,
     QuizLastActivitiesView,
     QuizQuestionStatsView,
+    GenerateQuizFromAI,
 )
 urlpatterns = [
     # Authentication
@@ -35,6 +36,8 @@ urlpatterns = [
     path("dashboard/quiz/responses-per-day/", QuizResponsesPerDayView.as_view()),
     path("dashboard/quiz/last-activities/", QuizLastActivitiesView.as_view()),
     path("dashboard/quiz/questions/<int:question_id>/stats/", QuizQuestionStatsView.as_view()),
+    # AI Quiz Generation
+    path("generate-quiz/", GenerateQuizFromAI.as_view(), name="generate-quiz"),
 ]
 
 

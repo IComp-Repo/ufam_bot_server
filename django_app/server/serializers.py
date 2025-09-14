@@ -69,3 +69,19 @@ class UserGroupListItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PollUserGroup
         fields = ['id', 'title', 'chat_id', 'fetch_date', 'bind_date']
+
+class GenerateQuizSerializer(serializers.Serializer):
+    """Serializer para validar os dados de entrada para geração de quiz via IA."""
+    prompt = serializers.CharField(
+        max_length=255, # Limitar o consumo de tokens
+        help_text="O tema ou assunto para o quiz."
+    )
+    num_questions = serializers.IntegerField(
+        min_value=1, 
+        max_value=10, 
+        default=5, 
+        help_text="O número de questões a serem geradas (entre 1 e 10)."
+    )
+
+    class Meta:
+        fields = ['prompt', 'num_questions']

@@ -18,6 +18,15 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
+from .exceptions import (
+    APIKeyNotConfiguredError,
+    APICommunicationError
+)
+
+from .services import (
+    generate_quiz_with_groq
+)
+
 from .models import (
     PollUser,
     Group,
@@ -37,6 +46,7 @@ from .serializers import (
     RegisterSerializer,
     SendPollSerializer,
     SendQuizSerializer,
+    GenerateQuizSerializer
 )
 
 from .tasks import send_quiz_task
@@ -50,6 +60,7 @@ from project.settings.base import (
     REFRESH_COOKIE_NAME,
     REFRESH_COOKIE_PATH,
     REFRESH_TTL_DAYS,
+    GROQ_ALLOWED_USERS,
 )
 
 
@@ -955,3 +966,67 @@ class QuizQuestionStatsView(APIView):
                 "options": options,
             }
         }, status=200)
+
+class GenerateQuizFromAI(APIView):
+    """
+    Endpoint para gerar um quiz formatado em JSON utilizando a API da Groq.
+    Requer autenticação.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Gera um quiz em formato JSON usando a API da Groq Cloud. (Limitado a usuários definidos o .env)",
+        request_body=GenerateQuizSerializer,
+        responses={
+            200: openapi.Response(description="Quiz JSON gerado com sucesso."),
+            400: "Requisição inválida (prompt ou num_questions ausente/inválido).",
+            403: "Acesso negado. Usuário não autorizado a usar este serviço.",
+            500: "Erro ao se comunicar com a API da Groq ou chave não configurada.",
+        }
+    )
+    def post(self, request):
+
+        # Filtro de usuários permitidos
+        allowed_emails = GROQ_ALLOWED_USERS
+        if allowed_emails and request.user.email not in allowed_emails:
+            return Response({
+                "data": {
+                    "success": False,
+                    "message": "Acesso negado. Você não tem permissão para usar este serviço."
+                }
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = GenerateQuizSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                "data": {"success": False, "errors": serializer.errors}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        user_prompt = validated_data.get("prompt")
+        num_questions = validated_data.get("num_questions")
+
+        try:
+            # A view agora DELEGA a lógica para o serviço
+            quiz_data = generate_quiz_with_groq(
+                user_prompt=user_prompt,
+                num_questions=num_questions
+            )
+            
+            # E apenas formata a resposta de sucesso
+            return Response({
+                "data": {
+                    "success": True,
+                    "message": "Quiz gerado com sucesso.",
+                    "quiz": quiz_data
+                }
+            }, status=status.HTTP_200_OK)
+
+        except (APIKeyNotConfiguredError, APICommunicationError) as e:
+            return Response({
+                "data": {
+                    "success": False,
+                    "message": "Ocorreu um erro ao gerar o quiz. Tente novamente.",
+                    "error_detail": str(e) # Opcional: útil para debug
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -135,6 +135,9 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "INFO"},
 }
 
+# -------- Groq Cloud --------
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_ALLOWED_USERS = get_list("GROQ_ALLOWED_USERS", [])  # emails permitidos a usar o serviço
 
 TEMPLATES = [
     {
