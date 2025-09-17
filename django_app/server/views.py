@@ -1018,7 +1018,7 @@ class GenerateQuizFromAI(APIView):
                 "data": {
                     "success": True,
                     "message": "Quiz gerado com sucesso.",
-                    "quiz": quiz_data
+                    **quiz_data
                 }
             }, status=status.HTTP_200_OK)
 
