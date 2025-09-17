@@ -52,13 +52,11 @@ def generate_quiz_with_groq(user_prompt: str, num_questions: int) -> dict:
     Sua tarefa é gerar um quiz em formato JSON bem estruturado, baseado no tema fornecido.
     O JSON deve seguir rigorosamente a seguinte estrutura:
     {
-      "title": "Um título criativo para o quiz",
       "questions": [
         {
-          "question_text": "O texto da pergunta.",
+          "question": "O texto da pergunta.",
           "options": ["Opção A", "Opção B", "Opção C", "Opção D"],
-          "correct_option_index": 2,
-          "explanation": "Uma breve explicação do porquê a resposta está correta."
+          "correctOption": 2
         }
       ]
     }
