@@ -1014,13 +1014,7 @@ class GenerateQuizFromAI(APIView):
             )
             
             # E apenas formata a resposta de sucesso
-            return Response({
-                "data": {
-                    "success": True,
-                    "message": "Quiz gerado com sucesso.",
-                    **quiz_data
-                }
-            }, status=status.HTTP_200_OK)
+            return Response(quiz_data, status=status.HTTP_200_OK)
 
         except (APIKeyNotConfiguredError, APICommunicationError) as e:
             return Response({
